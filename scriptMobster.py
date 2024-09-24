@@ -27,11 +27,11 @@ class click:
     def logar(self):
         # Localizando o campo de login pelo XPath e inserindo o login
         login_input = self.driver.find_element(By.XPATH, "/html/body/center[2]/center/div[1]/form/input[1]")
-        login_input.send_keys("payafk")
+        login_input.send_keys(self.USER_LOGIN)
 
         # Localizando o campo de senha pelo XPath e inserindo a senha
         password_input = self.driver.find_element(By.XPATH, "/html/body/center[2]/center/div[1]/form/input[2]")
-        password_input.send_keys("payafk")
+        password_input.send_keys(self.USER_SENHA)
 
         # Localizando o botão de login pelo XPath e clicando nele
         login_button = self.driver.find_element(By.XPATH, "/html/body/center[2]/center/div[1]/form/input[6]")
