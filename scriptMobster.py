@@ -1,8 +1,9 @@
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
+from webdriver_manager.chrome import ChromeDriverManager
 import time
 
 
@@ -15,8 +16,7 @@ class click:
         self.USER_CODE = "283231"
         self.LIFE_VERIFY = 290
 
-        chrome_service = Service("C:\\Users\\Algo Gamer\\OneDrive\\Documentos\\chromedriver.exe")
-        self.driver = webdriver.Chrome(service=chrome_service)
+        self.driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
         # self.driver.maximize_window()
 
     def abrir_site(self):
