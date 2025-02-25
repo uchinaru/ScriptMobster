@@ -1,3 +1,5 @@
+import keyboard
+from requests import options
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
@@ -5,6 +7,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
+from colorama import init, Fore, Back, Style
 import time
 
 
@@ -22,7 +25,7 @@ class MobsterBot:
         chrome_options = Options()
         chrome_options.add_argument("--headless") #Com essa opção ativa vai rodar o navegador sem opção grafica!
 
-        self.driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+        self.driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()),options=chrome_options)
         self.driver.get(self.SITE_LINK)
 
     def logar(self):
@@ -108,7 +111,7 @@ class MobsterBot:
         )
 
         health_value = int(health_div.text)
-        print(f"Seu nivel de vida: ", health_div.text)
+        print("Seu nivel de vida: " + Fore.RED + Style.BRIGHT + f"{health_div.text}" + Fore.RESET + Style.RESET_ALL)
         return health_value < self.LIFE_VERIFY
 
     def findUserToAtack(self):
@@ -151,11 +154,11 @@ class MobsterBot:
 
         if status_atack.text == 'Insuccesso!':
             self.curar_atack_again()
-            print(f"Deu ruim, player {self.PLAYER_ALVO} é muito forte, Insuccesso!")
+            print(Fore.RED + Style.BRIGHT + f" Deu ruim, player {self.PLAYER_ALVO} é muito forte, Insuccesso!"+ Fore.RESET + Style.RESET_ALL)
             return True
         else:
             self.curar_atack_again()
-            print(f"Primeiro ataque ao {self.PLAYER_ALVO} feito com successo!")
+            print(Fore.GREEN + Style.BRIGHT + f"Ataque ao {self.PLAYER_ALVO} feito com successo!"+ Fore.RESET + Style.RESET_ALL)
             return False
 
     def atacar_procurados(self):
@@ -171,14 +174,14 @@ class MobsterBot:
                         continue
 
                     if self.verificar_stm() <= 0:
-                        print(f"Sua estamina: {self.verificar_stm()}")
+                        print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.verificar_stm()}" + Fore.RESET + Style.RESET_ALL)
                         break
 
                     self.PLAYER_ALVO = PLAYER_ALVO
-                    NIVEL_PLAYER_ALVO = int(PLAYER_ALVO.split("\n")[-1].replace("Level: ", "").strip())
+                    NIVEL_PLAYER_ALVO = int(PLAYER_ALVO.split("\n")[-1].replace("Level: ", "").replace(",", "").strip())
 
                     if NIVEL_PLAYER_ALVO < self.MAX_LEVEL_TO_ATACK and "MEGA" not in PLAYER_ALVO.upper():
-                        print(f"Atacando: {PLAYER_ALVO}")
+                        print(Fore.YELLOW + Style.BRIGHT + f"Atacando: {PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
                         botao_attack = procurado.find_element(By.XPATH, ".//a[contains(@class, 'button_blue')]")
                         botao_attack.click()
                         time.sleep(1)
@@ -191,21 +194,21 @@ class MobsterBot:
                             repetir_atack = self.driver.find_elements(By.XPATH, "/html/body/div[5]/center/div[1]/div[1]/font/font/div/a")
 
                             if self.verificar_stm() <= 0:
-                                print(f"Sem estamina {self.verificar_stm()}")
+                                print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.verificar_stm()}" + Fore.RESET + Style.RESET_ALL)
                                 break
 
                             if repetir_atack:
-                                print(f"Repetindo o atack em {PLAYER_ALVO}")
+                                print(Fore.LIGHTCYAN_EX + Style.BRIGHT + f"Repetindo o atack em {PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
                                 repetir_atack[0].click()
                                 time.sleep(2)
                                 self.curar_atack_again()
                                 time.sleep(2)
 
                             else:
-                                print("Botão 'Attack Again' desapareceu. Seguindo para o próximo alvo.")
+                                print(Fore.YELLOW +"Botão 'Attack Again' desapareceu. Seguindo para o próximo alvo." + Fore.RESET)
                                 break
                     else:
-                        print(f" O player não vai ser atacado:  {PLAYER_ALVO}")
+                        print(" O player não vai ser atacado: " + Fore.RED + Style.BRIGHT + f"{PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
                 except Exception as e:
                     print(e)
 
@@ -220,7 +223,7 @@ scriptMobster.logar()
 scriptMobster.curar()
 
 contador = 0
-while contador < 400:
+while contador < 40000:
     time.sleep(3)
     scriptMobster.hitlist_players()
     scriptMobster.atacar_procurados()
