@@ -4,37 +4,38 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
 import time
 
 
-class click:
+class MobsterBot:
 
     def __init__(self):
         self.SITE_LINK = "https://app.playersrevenge.com/iframe.php"
         self.USER_LOGIN = "payafk"
         self.USER_SENHA = "payafk"
         self.USER_CODE = "283231"
-        self.LIFE_VERIFY = 290
+        self.LIFE_VERIFY = 390
+        self.MAX_LEVEL_TO_ATACK = 200
+        self.PLAYER_ALVO = ''
+
+        chrome_options = Options()
+        chrome_options.add_argument("--headless") #Com essa opção ativa vai rodar o navegador sem opção grafica!
 
         self.driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
-        # self.driver.maximize_window()
-
-    def abrir_site(self):
-        time.sleep(2)
         self.driver.get(self.SITE_LINK)
-        time.sleep(2)
 
     def logar(self):
         # Localizando o campo de login pelo XPath e inserindo o login
-        login_input = self.driver.find_element(By.XPATH, "/html/body/center[2]/center/div[1]/form/input[1]")
+        login_input = WebDriverWait(self.driver, 10).until((ec.element_to_be_clickable((By.XPATH, "/html/body/center[2]/center/div[1]/form/input[1]"))))
         login_input.send_keys(self.USER_LOGIN)
 
         # Localizando o campo de senha pelo XPath e inserindo a senha
-        password_input = self.driver.find_element(By.XPATH, "/html/body/center[2]/center/div[1]/form/input[2]")
+        password_input = WebDriverWait(self.driver, 10).until((ec.element_to_be_clickable((By.XPATH, "/html/body/center[2]/center/div[1]/form/input[2]"))))
         password_input.send_keys(self.USER_SENHA)
 
         # Localizando o botão de login pelo XPath e clicando nele
-        login_button = self.driver.find_element(By.XPATH, "/html/body/center[2]/center/div[1]/form/input[6]")
+        login_button = WebDriverWait(self.driver, 10).until((ec.element_to_be_clickable((By.XPATH, "/html/body/center[2]/center/div[1]/form/input[6]"))))
         login_button.click()
 
     def hitlist_players(self):
@@ -48,8 +49,6 @@ class click:
             ec.element_to_be_clickable((By.XPATH, "//span[@id='I7']"))
         )
         hitlistplayer_button.click()
-
-        self.driver.switch_to.default_content()
 
     def curar(self):
 
@@ -76,7 +75,32 @@ class click:
         close_button.click()
 
         self.driver.switch_to.default_content()
-        time.sleep(5)
+        time.sleep(1)
+
+    def curar_atack_again(self):
+        #Esse metodo nao interege com o iframe mprgameframe
+        hospitalOpen_button = WebDriverWait(self.driver, 5).until(
+            ec.element_to_be_clickable((By.XPATH, "//span[@id='I9']"))
+        )
+        hospitalOpen_button.click()
+
+        healer_button = WebDriverWait(self.driver, 5).until(
+            ec.element_to_be_clickable((By.XPATH, "//span[@id='healer']/button"))
+        )
+
+        while self.verificar_life():
+            healer_button.click()
+
+        close_button = WebDriverWait(self.driver, 5).until(
+            ec.element_to_be_clickable((By.XPATH, "/html/body/div[6]/span[1]/a/b/font"))
+        )
+        close_button.click()
+
+    def verificar_stm(self):
+        stamin_div = WebDriverWait(self.driver, 5).until(
+            ec.presence_of_element_located((By.ID, "fuckyoustam"))
+        )
+        return int(stamin_div.text)
 
     def verificar_life(self):
         health_div = WebDriverWait(self.driver, 5).until(
@@ -84,11 +108,8 @@ class click:
         )
 
         health_value = int(health_div.text)
-
-        if health_value < self.LIFE_VERIFY:
-            return True
-        else:
-            return False
+        print(f"Seu nivel de vida: ", health_div.text)
+        return health_value < self.LIFE_VERIFY
 
     def findUserToAtack(self):
         iframe = WebDriverWait(self.driver, 5).until(
@@ -123,19 +144,84 @@ class click:
         self.driver.switch_to.default_content()
         time.sleep(5)
 
-    def attack(self):
-        attack_button = WebDriverWait(self.driver, 5).until(
-            ec.element_to_be_clickable((By.XPATH, "/html/body/div[5]/center/div[1]/div[4]/span[3]"))
-        )
-        attack_button.click()
+    def verifica_status_do_atack(self):
 
-        attack_again_button = WebDriverWait(self.driver, 5).until(
-            ec.element_to_be_clickable((By.XPATH, "/html/body/div[11]/div/div[9]/div/div/div/a"))
-        )
-        attack_again_button.click()
+        status_atack = WebDriverWait(self.driver, 5).until(
+            ec.presence_of_element_located((By.XPATH, "/html/body/div[5]/center/div[1]/div[1]/div/div/font/b")))
+
+        if status_atack.text == 'Insuccesso!':
+            self.curar_atack_again()
+            print(f"Deu ruim, player {self.PLAYER_ALVO} é muito forte, Insuccesso!")
+            return True
+        else:
+            self.curar_atack_again()
+            print(f"Primeiro ataque ao {self.PLAYER_ALVO} feito com successo!")
+            return False
+
+    def atacar_procurados(self):
+        try:
+            WebDriverWait(self.driver, 10).until(ec.presence_of_element_located((By.XPATH, "/html/body/div[5]/center/div[1]/div[7]")))  # Lista de procurados
+            procurados = self.driver.find_elements(By.CLASS_NAME, "bountied_hunter_row")  # Pegando os elementos dentro da lista de procurados
+
+            for procurado in procurados:
+                try:
+                    PLAYER_ALVO = procurado.find_element(By.CLASS_NAME, "bounty_name").text.strip()
+
+                    if PLAYER_ALVO == "":
+                        continue
+
+                    if self.verificar_stm() <= 0:
+                        print(f"Sua estamina: {self.verificar_stm()}")
+                        break
+
+                    self.PLAYER_ALVO = PLAYER_ALVO
+                    NIVEL_PLAYER_ALVO = int(PLAYER_ALVO.split("\n")[-1].replace("Level: ", "").strip())
+
+                    if NIVEL_PLAYER_ALVO < self.MAX_LEVEL_TO_ATACK and "MEGA" not in PLAYER_ALVO.upper():
+                        print(f"Atacando: {PLAYER_ALVO}")
+                        botao_attack = procurado.find_element(By.XPATH, ".//a[contains(@class, 'button_blue')]")
+                        botao_attack.click()
+                        time.sleep(1)
+
+                        if self.verifica_status_do_atack():
+                            continue
+
+                        while True:
+                            #Verificando se o botão atack again esta em tela para atacar novamente
+                            repetir_atack = self.driver.find_elements(By.XPATH, "/html/body/div[5]/center/div[1]/div[1]/font/font/div/a")
+
+                            if self.verificar_stm() <= 0:
+                                print(f"Sem estamina {self.verificar_stm()}")
+                                break
+
+                            if repetir_atack:
+                                print(f"Repetindo o atack em {PLAYER_ALVO}")
+                                repetir_atack[0].click()
+                                time.sleep(2)
+                                self.curar_atack_again()
+                                time.sleep(2)
+
+                            else:
+                                print("Botão 'Attack Again' desapareceu. Seguindo para o próximo alvo.")
+                                break
+                    else:
+                        print(f" O player não vai ser atacado:  {PLAYER_ALVO}")
+                except Exception as e:
+                    print(e)
+
+            self.driver.switch_to.default_content()
+
+        except Exception as e:
+            print(f"Erro ao carregar a lista de players: {e}")
 
 
-scriptMobster = click()
-scriptMobster.abrir_site()
+scriptMobster = MobsterBot()
 scriptMobster.logar()
-scriptMobster.hitlist_players()
+scriptMobster.curar()
+
+contador = 0
+while contador < 400:
+    time.sleep(3)
+    scriptMobster.hitlist_players()
+    scriptMobster.atacar_procurados()
+    contador = contador + 1
