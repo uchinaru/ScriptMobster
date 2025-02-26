@@ -41,23 +41,18 @@ class MobsterBot:
         login_button.click()
 
     def hitlist_players(self):
-        iframe = WebDriverWait(self.driver, 10).until(
-            ec.presence_of_element_located((By.ID, "mprgameframe"))  # Localiza o iframe pelo ID
-        )
-
-        self.driver.switch_to.frame(iframe)
+        self.acessa_iframe()
 
         hitlistplayer_button = WebDriverWait(self.driver, 5).until(
             ec.element_to_be_clickable((By.XPATH, "//span[@id='I7']"))
         )
         hitlistplayer_button.click()
 
+        self.sai_do_iframe()
+
     def curar(self):
 
-        iframe = WebDriverWait(self.driver, 5).until(
-            ec.presence_of_element_located((By.ID, "mprgameframe"))
-        )
-        self.driver.switch_to.frame(iframe)
+        self.acessa_iframe()
 
         hospitalOpen_button = WebDriverWait(self.driver, 5).until(
             ec.element_to_be_clickable((By.XPATH, "//span[@id='I9']"))
@@ -76,7 +71,7 @@ class MobsterBot:
         )
         close_button.click()
 
-        self.driver.switch_to.default_content()
+        self.sai_do_iframe()
         time.sleep(1)
 
     def curar_atack_again(self):
@@ -99,6 +94,7 @@ class MobsterBot:
         close_button.click()
 
     def verificar_stm(self):
+        # Esse metodo nao interege com o iframe mprgameframe
         stamin_div = WebDriverWait(self.driver, 5).until(
             ec.presence_of_element_located((By.ID, "fuckyoustam"))
         )
@@ -113,12 +109,15 @@ class MobsterBot:
         print("Seu nivel de vida: " + Fore.RED + Style.BRIGHT + f"{health_div.text}" + Fore.RESET + Style.RESET_ALL)
         return health_value < self.LIFE_VERIFY
 
-    def findUserToAtack(self):
-        iframe = WebDriverWait(self.driver, 5).until(
-            ec.presence_of_element_located((By.ID, "mprgameframe"))  # Localiza o iframe pelo ID
-        )
-
+    def acessa_iframe(self):
+        iframe = WebDriverWait(self.driver, 5).until(ec.presence_of_element_located((By.ID, "mprgameframe"))) # Localiza o iframe pelo ID)
         self.driver.switch_to.frame(iframe)
+
+    def sai_do_iframe(self):
+        self.driver.switch_to.default_content()
+
+    def findUserToAtack(self):
+        self.acessa_iframe()
 
         myMobs_button = WebDriverWait(self.driver, 5).until(
             ec.element_to_be_clickable((By.XPATH, "//span[@id='I12']"))
@@ -143,7 +142,7 @@ class MobsterBot:
         )
         close_input.click()
 
-        self.driver.switch_to.default_content()
+        self.sai_do_iframe()
         time.sleep(5)
 
     def verifica_status_do_atack(self):
@@ -172,64 +171,70 @@ class MobsterBot:
             return False
 
     def atacar_procurados(self):
+        self.acessa_iframe()
+
         try:
             WebDriverWait(self.driver, 10).until(ec.presence_of_element_located((By.XPATH, "/html/body/div[5]/center/div[1]/div[7]")))  # Lista de procurados
             procurados = self.driver.find_elements(By.CLASS_NAME, "bountied_hunter_row")  # Pegando os elementos dentro da lista de procurados
 
-            for procurado in procurados:
-                try:
-                    PLAYER_ALVO = procurado.find_element(By.CLASS_NAME, "bounty_name").text.strip()
+            if procurados.__len__() != 0:
 
-                    if PLAYER_ALVO == "":
-                        continue
+                for procurado in procurados:
+                    try:
+                        PLAYER_ALVO = procurado.find_element(By.CLASS_NAME, "bounty_name").text.strip()
 
-                    if self.verificar_stm() <= 0:
-                        print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.verificar_stm()}" + Fore.RESET + Style.RESET_ALL)
-                        break
-
-                    self.PLAYER_ALVO = PLAYER_ALVO
-                    NIVEL_PLAYER_ALVO = int(PLAYER_ALVO.split("\n")[-1].replace("Level: ", "").replace(",", "").strip())
-
-                    if NIVEL_PLAYER_ALVO < self.MAX_LEVEL_TO_ATACK and "MEGA" not in PLAYER_ALVO.upper():
-
-                        if self.verifica_lista_players_fortes():
+                        if PLAYER_ALVO == "":
                             continue
 
-                        print(Fore.YELLOW + Style.BRIGHT + f"Alvo selecionado: {PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
-                        botao_attack = procurado.find_element(By.XPATH, ".//a[contains(@class, 'button_blue')]")
-                        botao_attack.click()
-                        time.sleep(1)
+                        if self.verificar_stm() <= 0:
+                            print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.verificar_stm()}" + Fore.RESET + Style.RESET_ALL)
+                            break
 
-                        if self.verifica_status_do_atack():
-                            continue
+                        self.PLAYER_ALVO = PLAYER_ALVO
+                        NIVEL_PLAYER_ALVO = int(PLAYER_ALVO.split("\n")[-1].replace("Level: ", "").replace(",", "").strip())
 
-                        while True:
-                            #Verificando se o botão atack again esta em tela para atacar novamente
-                            repetir_atack = self.driver.find_elements(By.XPATH, "/html/body/div[5]/center/div[1]/div[1]/font/font/div/a")
+                        if NIVEL_PLAYER_ALVO < self.MAX_LEVEL_TO_ATACK and "MEGA" not in PLAYER_ALVO.upper():
 
-                            if self.verificar_stm() <= 0:
-                                print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.verificar_stm()}" + Fore.RESET + Style.RESET_ALL)
-                                break
+                            if self.verifica_lista_players_fortes():
+                                continue
 
-                            if repetir_atack:
-                                print(Fore.LIGHTCYAN_EX + Style.BRIGHT + f"Repetindo o atack em {PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
-                                repetir_atack[0].click()
-                                time.sleep(2)
-                                self.curar_atack_again()
-                                time.sleep(2)
+                            print(Fore.YELLOW + Style.BRIGHT + f"Alvo selecionado: {PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
+                            botao_attack = procurado.find_element(By.XPATH, ".//a[contains(@class, 'button_blue')]")
+                            botao_attack.click()
+                            time.sleep(1)
 
-                            else:
-                                print(Fore.YELLOW +"Botão 'Attack Again' desapareceu. Seguindo para o próximo alvo." + Fore.RESET)
-                                break
-                    else:
-                        print(" O player não vai ser atacado: " + Fore.RED + Style.BRIGHT + f"{PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
-                except Exception as e:
-                    print(e)
+                            if self.verifica_status_do_atack():
+                                continue
 
-            self.driver.switch_to.default_content()
+                            while True:
+                                #Verificando se o botão atack again esta em tela para atacar novamente
+                                repetir_atack = self.driver.find_elements(By.XPATH, "/html/body/div[5]/center/div[1]/div[1]/font/font/div/a")
+
+                                if self.verificar_stm() <= 0:
+                                    print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.verificar_stm()}" + Fore.RESET + Style.RESET_ALL)
+                                    break
+
+                                if repetir_atack:
+                                    print(Fore.LIGHTCYAN_EX + Style.BRIGHT + f"Repetindo o atack em {PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
+                                    repetir_atack[0].click()
+                                    time.sleep(2)
+                                    self.curar_atack_again()
+                                    time.sleep(2)
+
+                                else:
+                                    print(Fore.YELLOW +"Botão 'Attack Again' desapareceu. Seguindo para o próximo alvo." + Fore.RESET)
+                                    break
+                        else:
+                            print(" O player não vai ser atacado: " + Fore.RED + Style.BRIGHT + f"{PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
+                    except Exception as e:
+                        print(e)
+
+                self.sai_do_iframe()
+            else:
+                print(Fore.RED + "Lista de players procurados vazia !" + Fore.RESET)
 
         except Exception as e:
-            print(f"Erro ao carregar a lista de players: {e}")
+            print(Fore.RED + f"Erro ao carregar a lista de players: {e}" + Fore.RESET)
 
 
 scriptMobster = MobsterBot()
