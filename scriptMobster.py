@@ -1,5 +1,3 @@
-import keyboard
-from requests import options
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
@@ -21,9 +19,10 @@ class MobsterBot:
         self.LIFE_VERIFY = 390
         self.MAX_LEVEL_TO_ATACK = 200
         self.PLAYER_ALVO = ''
+        self.LIST_PLAYERS_STRONGS = []
 
         chrome_options = Options()
-        chrome_options.add_argument("--headless") #Com essa opção ativa vai rodar o navegador sem opção grafica!
+        chrome_options.add_argument("--headless")  #Com essa opção ativa vai rodar o navegador sem opção grafica!
 
         self.driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()),options=chrome_options)
         self.driver.get(self.SITE_LINK)
@@ -154,11 +153,22 @@ class MobsterBot:
 
         if status_atack.text == 'Insuccesso!':
             self.curar_atack_again()
-            print(Fore.RED + Style.BRIGHT + f" Deu ruim, player {self.PLAYER_ALVO} é muito forte, Insuccesso!"+ Fore.RESET + Style.RESET_ALL)
+            print(Fore.RED + Style.BRIGHT + f"Deu ruim, player {self.PLAYER_ALVO} é muito forte, Insuccesso!"+ Fore.RESET + Style.RESET_ALL)
+            self.LIST_PLAYERS_STRONGS.append(self.PLAYER_ALVO)
             return True
         else:
             self.curar_atack_again()
             print(Fore.GREEN + Style.BRIGHT + f"Ataque ao {self.PLAYER_ALVO} feito com successo!"+ Fore.RESET + Style.RESET_ALL)
+            return False
+
+    def verifica_lista_players_fortes(self):
+        if self.LIST_PLAYERS_STRONGS.__len__() != 0:
+            if self.LIST_PLAYERS_STRONGS.__contains__(self.PLAYER_ALVO):
+                print(Fore.RED + Style.BRIGHT + f"Pulando o Player {self.PLAYER_ALVO}, muito forte!" + Fore.RESET + Style.RESET_ALL)
+                return True
+            else:
+                return False
+        else:
             return False
 
     def atacar_procurados(self):
@@ -181,7 +191,11 @@ class MobsterBot:
                     NIVEL_PLAYER_ALVO = int(PLAYER_ALVO.split("\n")[-1].replace("Level: ", "").replace(",", "").strip())
 
                     if NIVEL_PLAYER_ALVO < self.MAX_LEVEL_TO_ATACK and "MEGA" not in PLAYER_ALVO.upper():
-                        print(Fore.YELLOW + Style.BRIGHT + f"Atacando: {PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
+
+                        if self.verifica_lista_players_fortes():
+                            continue
+
+                        print(Fore.YELLOW + Style.BRIGHT + f"Alvo selecionado: {PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
                         botao_attack = procurado.find_element(By.XPATH, ".//a[contains(@class, 'button_blue')]")
                         botao_attack.click()
                         time.sleep(1)
