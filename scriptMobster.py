@@ -171,9 +171,10 @@ class MobsterBot:
             return False
 
     def atacar_procurados(self):
-        self.acessa_iframe()
 
         try:
+            self.acessa_iframe()
+
             WebDriverWait(self.driver, 10).until(ec.presence_of_element_located((By.XPATH, "/html/body/div[5]/center/div[1]/div[7]")))  # Lista de procurados
             procurados = self.driver.find_elements(By.CLASS_NAME, "bountied_hunter_row")  # Pegando os elementos dentro da lista de procurados
 
@@ -232,6 +233,7 @@ class MobsterBot:
                 self.sai_do_iframe()
             else:
                 print(Fore.RED + "Lista de players procurados vazia !" + Fore.RESET)
+                self.sai_do_iframe()
 
         except Exception as e:
             print(Fore.RED + f"Erro ao carregar a lista de players: {e}" + Fore.RESET)
