@@ -27,9 +27,9 @@ class MobsterBot:
         self.driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=chrome_options)
         self.driver.get(self.SITE_LINK)
 
-    def logar(self):
+    def login(self):
 
-        self.carrega_login_password()
+        self.load_login_password()
 
         # Localizando o campo de login pelo XPath e inserindo o login
         login_input = WebDriverWait(self.driver, 15).until((ec.element_to_be_clickable((By.XPATH, "/html/body/center[2]/center/div[1]/form/input[1]"))))
@@ -43,7 +43,7 @@ class MobsterBot:
         login_button = WebDriverWait(self.driver, 15).until((ec.element_to_be_clickable((By.XPATH, "/html/body/center[2]/center/div[1]/form/input[6]"))))
         login_button.click()
 
-    def carrega_login_password(self):
+    def load_login_password(self):
         with open("LOGIN.txt", "r") as login:
             dados = login.readlines()
 
@@ -51,18 +51,18 @@ class MobsterBot:
             self.USER_PASSWORD = dados[1]
 
     def hitlist_players(self):
-        self.acessa_iframe()
+        self.access_iframe()
 
         hitlistplayer_button = WebDriverWait(self.driver, 15).until(
             ec.element_to_be_clickable((By.XPATH, "//span[@id='I7']"))
         )
         hitlistplayer_button.click()
 
-        self.sai_do_iframe()
+        self.exit_iframe()
 
-    def curar(self):
+    def heal(self):
 
-        self.acessa_iframe()
+        self.access_iframe()
 
         hospitalOpen_button = WebDriverWait(self.driver, 15).until(
             ec.element_to_be_clickable((By.XPATH, "//span[@id='I9']"))
@@ -73,7 +73,7 @@ class MobsterBot:
             ec.element_to_be_clickable((By.XPATH, "//span[@id='healer']/button"))
         )
 
-        while self.verificar_life():
+        while self.check_life():
             healer_button.click()
 
         close_button = WebDriverWait(self.driver, 15).until(
@@ -81,10 +81,10 @@ class MobsterBot:
         )
         close_button.click()
 
-        self.sai_do_iframe()
+        self.exit_iframe()
         time.sleep(1)
 
-    def curar_atack_again(self):
+    def heal_attack_again(self):
         # Esse metodo nao interege com o iframe mprgameframe
         hospitalOpen_button = WebDriverWait(self.driver, 15).until(
             ec.element_to_be_clickable((By.XPATH, "//span[@id='I9']"))
@@ -95,7 +95,7 @@ class MobsterBot:
             ec.element_to_be_clickable((By.XPATH, "//span[@id='healer']/button"))
         )
 
-        while self.verificar_life():
+        while self.check_life():
             healer_button.click()
 
         close_button = WebDriverWait(self.driver, 15).until(
@@ -103,14 +103,14 @@ class MobsterBot:
         )
         close_button.click()
 
-    def verificar_stm(self):
+    def check_stamina(self):
         # Esse metodo nao interege com o iframe mprgameframe
         stamin_div = WebDriverWait(self.driver, 15).until(
             ec.presence_of_element_located((By.ID, "fuckyoustam"))
         )
         return int(stamin_div.text)
 
-    def verificar_life(self):
+    def check_life(self):
         health_div = WebDriverWait(self.driver, 15).until(
             ec.presence_of_element_located((By.ID, "healthStater"))
         )
@@ -119,19 +119,15 @@ class MobsterBot:
         print("Seu nivel de vida: " + Fore.RED + Style.BRIGHT + f"{health_div.text}" + Fore.RESET + Style.RESET_ALL)
         return health_value < self.LIFE_VERIFY
 
-    def acessa_iframe(self):
+    def access_iframe(self):
         iframe = WebDriverWait(self.driver, 15).until(ec.presence_of_element_located((By.ID, "mprgameframe")))  # Localiza o iframe pelo ID)
         self.driver.switch_to.frame(iframe)
 
-    def sai_do_iframe(self):
+    def exit_iframe(self):
         self.driver.switch_to.default_content()
 
-    def pegar_login_senha(self):
-        self.USER_LOGIN = input("Digite o login")
-        self.USER_PASSWORD = input("Digite a senha")
-
     def findUserToAtack(self):
-        self.acessa_iframe()
+        self.access_iframe()
 
         myMobs_button = WebDriverWait(self.driver, 15).until(
             ec.element_to_be_clickable((By.XPATH, "//span[@id='I12']"))
@@ -156,37 +152,37 @@ class MobsterBot:
         )
         close_input.click()
 
-        self.sai_do_iframe()
+        self.exit_iframe()
 
-    def verifica_status_do_atack(self):
+    def check_attack_status(self):
 
         status_atack = WebDriverWait(self.driver, 15).until(
             ec.presence_of_element_located((By.XPATH, "/html/body/div[5]/center/div[1]/div[1]/div/div/font/b")))
 
         if status_atack.text == 'Insuccesso!':
-            self.curar_atack_again()
+            self.heal_attack_again()
             print(Fore.RED + Style.BRIGHT + f"Deu ruim, player {self.PLAYER_ALVO} é muito forte, Insuccesso!" + Fore.RESET + Style.RESET_ALL)
-            self.salva_lista_players_fortes()
+            self.save_strong_players_list()
             return True
         else:
-            self.curar_atack_again()
+            self.heal_attack_again()
             print(Fore.GREEN + Style.BRIGHT + f"Ataque ao {self.PLAYER_ALVO} feito com successo!" + Fore.RESET + Style.RESET_ALL)
             return False
 
-    def carrega_lista_players_fortes(self):
+    def load_strong_players_list(self):
 
         if os.path.getsize("LIST_PLAYERS_STRONGS.txt") > 0:
             with open("LIST_PLAYERS_STRONGS.txt", "r") as arquivo:
                 return arquivo.readlines().__contains__(self.PLAYER_ALVO)
 
-    def salva_lista_players_fortes(self):
+    def save_strong_players_list(self):
         with open("LIST_PLAYERS_STRONGS.txt", "a") as arquivo:
             arquivo.write("\n"+self.PLAYER_ALVO)
 
-    def atacar_procurados(self):
+    def attack_wanted_players(self):
 
         try:
-            self.acessa_iframe()
+            self.access_iframe()
 
             WebDriverWait(self.driver, 15).until(ec.presence_of_element_located((By.XPATH, "/html/body/div[5]/center/div[1]/div[7]")))  # Lista de procurados
             procurados = self.driver.find_elements(By.CLASS_NAME, "bountied_hunter_row")  # Pegando os elementos dentro da lista de procurados
@@ -200,8 +196,8 @@ class MobsterBot:
                         if PLAYER_ALVO == "":
                             continue
 
-                        if self.verificar_stm() <= 0:
-                            print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.verificar_stm()}" + Fore.RESET + Style.RESET_ALL)
+                        if self.check_stamina() <= 0:
+                            print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.check_stamina()}" + Fore.RESET + Style.RESET_ALL)
                             break
 
                         NIVEL_PLAYER_ALVO = int(PLAYER_ALVO.split("\n")[-1].replace("Level: ", "").replace(",", "").strip())
@@ -209,7 +205,7 @@ class MobsterBot:
 
                         if NIVEL_PLAYER_ALVO < self.MAX_LEVEL_TO_ATACK and "MEGA" not in self.PLAYER_ALVO.upper():
 
-                            if self.carrega_lista_players_fortes():
+                            if self.load_strong_players_list():
                                 continue
 
                             print(Fore.YELLOW + Style.BRIGHT + f"Alvo selecionado: {self.PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
@@ -217,22 +213,22 @@ class MobsterBot:
                             botao_attack.click()
                             time.sleep(1)
 
-                            if self.verifica_status_do_atack():
+                            if self.check_attack_status():
                                 continue
 
                             while True:
                                 # Verificando se o botão atack again esta em tela para atacar novamente
                                 repetir_atack = self.driver.find_elements(By.XPATH, "/html/body/div[5]/center/div[1]/div[1]/font/font/div/a")
 
-                                if self.verificar_stm() <= 0:
-                                    print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.verificar_stm()}" + Fore.RESET + Style.RESET_ALL)
+                                if self.check_stamina() <= 0:
+                                    print(f"Sua estamina:" + Fore.LIGHTRED_EX + Style.BRIGHT + f" {self.check_stamina()}" + Fore.RESET + Style.RESET_ALL)
                                     break
 
                                 if repetir_atack:
                                     print(Fore.LIGHTCYAN_EX + Style.BRIGHT + f"Repetindo o atack em {self.PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
                                     repetir_atack[0].click()
                                     time.sleep(2)
-                                    self.curar_atack_again()
+                                    self.heal_attack_again()
                                     time.sleep(1)
 
                                 else:
@@ -243,25 +239,25 @@ class MobsterBot:
                     except Exception as e:
                         print(e)
 
-                self.sai_do_iframe()
+                self.exit_iframe()
             else:
                 print(Fore.RED + "Lista de players procurados vazia !" + Fore.RESET)
-                self.sai_do_iframe()
+                self.exit_iframe()
 
         except Exception as e:
             print(Fore.RED + f"Erro ao carregar a lista de players: {e}" + Fore.RESET)
 
 
 scriptMobster = MobsterBot()
-scriptMobster.logar()
-scriptMobster.curar()
+scriptMobster.login()
+scriptMobster.heal()
 
 contador = 0
 while contador < 40000:
     time.sleep(2)
     scriptMobster.hitlist_players()
-    scriptMobster.carrega_lista_players_fortes()
-    scriptMobster.atacar_procurados()
-    scriptMobster.curar()
+    scriptMobster.load_strong_players_list()
+    scriptMobster.attack_wanted_players()
+    scriptMobster.heal()
     contador = contador + 1
     print(Fore.LIGHTCYAN_EX + Style.BRIGHT + f"Contador em {contador}" + Fore.RESET + Style.RESET_ALL)
