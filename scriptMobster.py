@@ -13,7 +13,7 @@ import time
 class MobsterBot:
 
     def __init__(self):
-        self.SITE_LINK = "https://app.playersrevenge.com/iframe.php"
+        self.SITE_LINK = "https://app.playersrevenge.com/front.php"
         self.USER_LOGIN = ''
         self.USER_PASSWORD = ''
         self.USER_CODE = ''
@@ -77,7 +77,7 @@ class MobsterBot:
             healer_button.click()
 
         close_button = WebDriverWait(self.driver, 15).until(
-            ec.element_to_be_clickable((By.XPATH, "/html/body/div[6]/span[1]/a/b/font"))
+            ec.element_to_be_clickable((By.XPATH, "/html/body/center[1]/div/div/span[1]/a/b/font/i"))
         )
         close_button.click()
 
@@ -177,7 +177,7 @@ class MobsterBot:
 
     def save_strong_players_list(self):
         with open("LIST_PLAYERS_STRONGS.txt", "a") as arquivo:
-            arquivo.write("\n"+self.PLAYER_ALVO)
+            arquivo.write("\n"+self.PLAYER_ALVO.replace("(Lotto Listing) ", ""))
 
     def attack_wanted_players(self):
 
