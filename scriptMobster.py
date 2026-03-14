@@ -22,7 +22,7 @@ class MobsterBot:
         self.PLAYER_ALVO = ''
 
         chrome_options = Options()
-        chrome_options.add_argument("--headless")  # Com essa opção ativa vai rodar o navegador sem opção grafica!
+        #chrome_options.add_argument("--headless")  # Com essa opção ativa vai rodar o navegador sem opção grafica!
 
         self.driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=chrome_options)
         self.driver.get(self.SITE_LINK)
@@ -54,7 +54,7 @@ class MobsterBot:
         self.access_iframe()
 
         hitlistplayer_button = WebDriverWait(self.driver, 15).until(
-            ec.element_to_be_clickable((By.XPATH, "//span[@id='I7']"))
+            ec.element_to_be_clickable((By.XPATH, "/html/body/div[5]/div/div[2]/center/nav/ul/center/li[7]/span"))
         )
         hitlistplayer_button.click()
 
@@ -70,7 +70,7 @@ class MobsterBot:
         hospitalOpen_button.click()
 
         healer_button = WebDriverWait(self.driver, 15).until(
-            ec.element_to_be_clickable((By.XPATH, "//span[@id='healer']/button"))
+            ec.element_to_be_clickable((By.XPATH, "/html/body/center[1]/div/div/span[2]/button"))
         )
 
         while self.check_life():
@@ -79,10 +79,13 @@ class MobsterBot:
         close_button = WebDriverWait(self.driver, 15).until(
             ec.element_to_be_clickable((By.XPATH, "/html/body/center[1]/div/div/span[1]/a/b/font/i"))
         )
+
+        time.sleep(3)
         close_button.click()
+        print(Fore.RED + "FECHEI O BOTAO" + Fore.RESET)
 
         self.exit_iframe()
-        time.sleep(1)
+        time.sleep(3)
 
     def heal_attack_again(self):
         # Esse metodo nao interege com o iframe mprgameframe
@@ -99,8 +102,10 @@ class MobsterBot:
             healer_button.click()
 
         close_button = WebDriverWait(self.driver, 15).until(
-            ec.element_to_be_clickable((By.XPATH, "/html/body/div[6]/span[1]/a/b/font"))
+            ec.element_to_be_clickable((By.XPATH, "/html/body/center[1]/div/div/span[1]"))
         )
+
+        time.sleep(3)
         close_button.click()
 
     def check_stamina(self):
@@ -111,6 +116,7 @@ class MobsterBot:
         return int(stamin_div.text)
 
     def check_life(self):
+
         health_div = WebDriverWait(self.driver, 15).until(
             ec.presence_of_element_located((By.ID, "healthStater"))
         )
@@ -251,6 +257,8 @@ class MobsterBot:
 scriptMobster = MobsterBot()
 scriptMobster.login()
 scriptMobster.heal()
+scriptMobster.hitlist_players()
+scriptMobster.attack_wanted_players()
 
 contador = 0
 while contador < 40000:
