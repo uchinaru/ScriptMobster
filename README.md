@@ -23,7 +23,7 @@ Create `LOGIN.txt` with the username on the first line and the password on the s
 .venv/bin/python painel.py
 ```
 
-Abre `http://127.0.0.1:8765` no navegador. Pelo painel você inicia/para o bot, liga/desliga cada ação, ajusta os parâmetros e acompanha vida, stamina, energia, estatísticas e o log ao vivo. As mudanças valem a partir do próximo ciclo e ficam salvas em `config.json`.
+Abre `http://127.0.0.1:8765` no navegador. Ao iniciar, o bot lê o nome e os atributos do personagem e a lista de missões do jogo (salva em `missoes.json`). Pelo painel você inicia/para o bot, escolhe a missão pelo nome (com busca, ordenada por dinheiro médio por energia e marcando as bloqueadas pelo seu nível/mob), liga/desliga cada ação, ajusta os parâmetros e acompanha vida, stamina, energia, estatísticas e o log ao vivo. As mudanças valem a partir do próximo ciclo e ficam salvas em `config.json`.
 
 Opens `http://127.0.0.1:8765`. Start/stop the bot, toggle each action, tune parameters and follow health, stamina, energy, stats and the live log. Changes apply on the next cycle and are saved to `config.json`.
 
@@ -47,7 +47,7 @@ Cada ciclo: cura se a vida estiver baixa → ataca (hitlist ou alvo) se tiver st
 | **Hitlist** | Ataca os procurados com maior recompensa primeiro, até o seu nível + `nivel_extra_alvo`, ignorando MEGA. Repete o ataque enquanto o "Attack Again" aparecer. |
 | **Players fortes** | Quem venceu você vai para `LIST_PLAYERS_STRONGS.txt` e é ignorado por `dias_expirar_fortes` dias. |
 | **Alvo específico** | Com `alvo_id`, ataca só esse player quando ele estiver na hitlist (o ID aparece no perfil, `seePage_<id>`). |
-| **Missões** | Sem stamina, gasta a energia na missão `missao_id` (padrão 2, "Make a Drop Off", 24 de energia). |
+| **Missões** | Sem stamina, gasta a energia na missão `missao_id`, escolhida pelo nome no painel. Usa a maior quantidade de repetições que a energia paga, até `missao_repeticoes`. |
 | **Banco** | Deposita o dinheiro acima de `reserva_dinheiro`. ⚠️ O jogo cobra 10% de taxa por depósito, por isso vem desligado. |
 | **Hospital** | Cura abaixo de `vida_minima`, com limite de cliques para não travar sem dinheiro. |
 | **Robustez** | Fecha popups do jogo, refaz o login se a sessão cair e só para depois de 5 erros seguidos. |
@@ -64,7 +64,7 @@ Qualquer chave omitida usa o padrão de `CONFIG_PADRAO` em `scriptMobster.py`.
 | `alvo_id` | `null` | ID de um player da hitlist |
 | `fazer_missoes` | `true` | Missões quando falta stamina |
 | `missao_id` | `2` | ID da missão |
-| `missao_repeticoes` | `50` | 1, 10, 25, 50, 100, 250, 500, 1000 ou 10000 por clique |
+| `missao_repeticoes` | `50` | Máximo de repetições por clique (1, 10, 25, 50, 100, 250, 500, 1000 ou 10000) |
 | `missao_max_rodadas` | `10` | Cliques em "Do Mission Again" por pausa |
 | `depositar_banco` | `false` | Deposita no banco (taxa de 10%) |
 | `reserva_dinheiro` | `1000000000000` | Dinheiro mantido na mão |
