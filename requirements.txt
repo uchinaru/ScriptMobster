@@ -1,0 +1,2 @@
+selenium>=4.36
+colorama>=0.4
