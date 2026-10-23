@@ -168,7 +168,8 @@ class MobsterBot:
         log.info(Fore.GREEN + "Login feito." + Fore.RESET)
 
     def load_login_password(self):
-        with open("LOGIN.txt", "r") as login:
+        # utf-8-sig ignora o BOM que o Bloco de Notas do Windows pode gravar no inicio do arquivo
+        with open("LOGIN.txt", "r", encoding="utf-8-sig") as login:
             dados = login.read().splitlines()
 
             self.USER_LOGIN = dados[0].strip()

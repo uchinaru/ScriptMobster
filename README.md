@@ -24,10 +24,28 @@ Bot em Python + Selenium para o [Mobsters Players Revenge](https://app.playersre
 
 **Requisitos:** Python 3.10+ (testado no 3.12) e Google Chrome. O chromedriver é baixado automaticamente pelo Selenium.
 
+#### 1. Instalar (só na primeira vez)
+
+Abra o terminal na pasta do projeto e rode:
+
+**🍎 macOS / Linux** (Terminal)
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
+
+**🪟 Windows** (PowerShell ou Prompt de Comando)
+
+```powershell
+py -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+```
+
+> No Windows, instale o Python pelo [python.org](https://www.python.org/downloads/) marcando **"Add python.exe to PATH"**. Se o comando `py` não existir, use `python`.
+> No macOS, se o Python do sistema for antigo, instale um novo com `brew install python@3.12` e use `python3.12` no lugar de `python3`.
+
+#### 2. Login
 
 Crie o arquivo `LOGIN.txt` na raiz do projeto com o usuário na primeira linha e a senha na segunda:
 
@@ -38,12 +56,29 @@ minha_senha
 
 > 🔒 `LOGIN.txt` está no `.gitignore` e nunca vai para o repositório.
 
+#### 3. Rodar
+
+Com tudo instalado, basta abrir o painel e clicar em **Iniciar**:
+
+| Sistema | Comando |
+|---|---|
+| 🍎 macOS / Linux | `.venv/bin/python painel.py` |
+| 🪟 Windows | `.venv\Scripts\python painel.py` |
+
 ---
 
 ### 🖥️ Painel web
 
+**🍎 macOS / Linux**
+
 ```bash
 .venv/bin/python painel.py
+```
+
+**🪟 Windows**
+
+```powershell
+.venv\Scripts\python painel.py
 ```
 
 Abre `http://127.0.0.1:8765` no navegador (só acessível na sua máquina). Feche com `Ctrl+C` no terminal: o bot é parado antes de sair.
@@ -63,7 +98,9 @@ As mudanças feitas no painel valem **a partir do próximo ciclo**, sem reinicia
 
 ### ⌨️ Linha de comando
 
-O bot também roda sem o painel:
+O bot também roda sem o painel.
+
+**🍎 macOS / Linux**
 
 ```bash
 .venv/bin/python scriptMobster.py                     # usa config.json (ou os padrões)
@@ -71,6 +108,16 @@ O bot também roda sem o painel:
 .venv/bin/python scriptMobster.py --ciclos 100        # para depois de 100 ciclos
 .venv/bin/python scriptMobster.py --alvo 284938       # ataca esse player pelo perfil dele
 .venv/bin/python scriptMobster.py --config outro.json # usa outro arquivo de configuração
+```
+
+**🪟 Windows**
+
+```powershell
+.venv\Scripts\python scriptMobster.py                     # usa config.json (ou os padrões)
+.venv\Scripts\python scriptMobster.py --headless          # Chrome sem janela
+.venv\Scripts\python scriptMobster.py --ciclos 100        # para depois de 100 ciclos
+.venv\Scripts\python scriptMobster.py --alvo 284938       # ataca esse player pelo perfil dele
+.venv\Scripts\python scriptMobster.py --config outro.json # usa outro arquivo de configuração
 ```
 
 Pare com `Ctrl+C`: o bot mostra o resumo da sessão e fecha o Chrome.
@@ -230,8 +277,8 @@ Bots costumam violar os termos de uso de jogos online e podem levar ao banimento
 
 ### 🇺🇸 English summary
 
-- **Setup:** `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`, then create `LOGIN.txt` (username on line 1, password on line 2).
-- **Panel:** `.venv/bin/python painel.py` opens `http://127.0.0.1:8765` to start/stop the bot, toggle each action live, pick missions by name and follow stats and the log.
+- **Setup:** macOS/Linux `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` · Windows `py -m venv .venv` then `.venv\Scripts\pip install -r requirements.txt`. Create `LOGIN.txt` (username on line 1, password on line 2).
+- **Panel:** `.venv/bin/python painel.py` (Windows: `.venv\Scripts\python painel.py`) opens `http://127.0.0.1:8765` to start/stop the bot, toggle each action live, pick missions by name and follow stats and the log.
 - **CLI:** `.venv/bin/python scriptMobster.py [--headless] [--ciclos N] [--alvo ID] [--config FILE]`.
 - **Features:** hitlist attacks (highest bounty first, level-capped, skips MEGA and players who beat you), attacking any player by profile ID, missions with spare energy, free daily bonus collection, auto-heal, optional bank deposits (10% fee), popup handling, auto re-login, session stats and `bot.log`.
 - **Disclaimer:** bots usually violate online games' terms of service and may get the account banned. Use at your own risk.
