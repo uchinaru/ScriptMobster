@@ -1,101 +1,82 @@
 ## 🤖 Script Bot Mobster Player Revenge
 
+Bot em Python + Selenium para o [Mobsters Players Revenge](https://app.playersrevenge.com/front.php), com um painel web para ligar e desligar cada ação enquanto ele roda.
+
+Python + Selenium bot for Mobsters Players Revenge, with a web panel to toggle each action while it runs.
+
 ### 🚀 Começando / Getting started
-* Essas instruções permitirão que você obtenha uma cópia do projeto em operação na sua máquina local para fins de desenvolvimento e teste.
-* These instructions will allow you to obtain a copy of the project running on your local machine for development and testing purposes.
 
-### 🔧 Instalação / Installation
-* pip install selenium
-* pip install webdriver-manager
-* pip install colorama
+Requisitos / Requirements: Python 3.10+ e Google Chrome.
 
-### 🛠️ Import's
-* from selenium import webdriver
-* from selenium.webdriver.chrome.service import Service
-* from selenium.webdriver.common.by import By
-* from selenium.webdriver.support.ui import WebDriverWait
-* from selenium.webdriver.support import expected_conditions as ec
-* from webdriver_manager.chrome import ChromeDriverManager
-* from selenium.webdriver.chrome.options import Options
-* from colorama import init, Fore, Back, Style
-* import os
-* import time
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
 
-### ⚙️ Funções da classe MobsterBot / Functions of the MobsterBot class
-As funções abaixo estão funcionais, nem todas estão em uso na parte inferior do bot como é possivel, caso precise você poderá ativar e utilizar da forma que achar melhor.
+Crie o arquivo `LOGIN.txt` com o usuário na primeira linha e a senha na segunda (ele não é versionado).
 
-The functions below are functional, not all of them are in use at the bottom of the bot as is possible, if you need them you can activate them and use them as you see fit.
+Create `LOGIN.txt` with the username on the first line and the password on the second (it is not tracked by git).
 
-*  def login(self): 👥 
-    - Realiza o login no sistema.  
-    - Logs into the system.  
+### 🖥️ Painel / Panel
 
+```bash
+.venv/bin/python painel.py
+```
 
-* def load_login_password(self):  📝
-    - Carrega o login e a senha do usuário.  
-    - Loads the user's login and password.  
+Abre `http://127.0.0.1:8765` no navegador. Pelo painel você inicia/para o bot, liga/desliga cada ação, ajusta os parâmetros e acompanha vida, stamina, energia, estatísticas e o log ao vivo. As mudanças valem a partir do próximo ciclo e ficam salvas em `config.json`.
 
+Opens `http://127.0.0.1:8765`. Start/stop the bot, toggle each action, tune parameters and follow health, stamina, energy, stats and the live log. Changes apply on the next cycle and are saved to `config.json`.
 
-* def hitlist_players(self):  📝
-    - Obtém a lista de jogadores na hitlist.  
-    - Retrieves the list of players on the hitlist.  
+### ⌨️ Linha de comando / Command line
 
+```bash
+.venv/bin/python scriptMobster.py                # usa config.json (ou os padrões)
+.venv/bin/python scriptMobster.py --headless     # Chrome sem janela
+.venv/bin/python scriptMobster.py --ciclos 100   # para depois de 100 ciclos
+.venv/bin/python scriptMobster.py --alvo 151174  # ataca só esse player quando ele estiver na hitlist
+```
 
-* def heal(self):  ❤️
-    - Cura o personagem.  
-    - Heals the character.  
+O log também é gravado em `bot.log`. / The log is also written to `bot.log`.
 
+### ⚔️ O que o bot faz / What the bot does
 
-* def heal_attack_again(self):  ❤️
-    - Cura e ataca novamente sem a interação do iframe da pagina.  
-    - Heals and attacks again without the interaction of the page iframe.  
+Cada ciclo: cura se a vida estiver baixa → ataca (hitlist ou alvo) se tiver stamina → senão faz missões com a energia → deposita no banco (se ligado) → espera o próximo ponto de stamina.
 
+| Ação | Descrição |
+|---|---|
+| **Hitlist** | Ataca os procurados com maior recompensa primeiro, até o seu nível + `nivel_extra_alvo`, ignorando MEGA. Repete o ataque enquanto o "Attack Again" aparecer. |
+| **Players fortes** | Quem venceu você vai para `LIST_PLAYERS_STRONGS.txt` e é ignorado por `dias_expirar_fortes` dias. |
+| **Alvo específico** | Com `alvo_id`, ataca só esse player quando ele estiver na hitlist (o ID aparece no perfil, `seePage_<id>`). |
+| **Missões** | Sem stamina, gasta a energia na missão `missao_id` (padrão 2, "Make a Drop Off", 24 de energia). |
+| **Banco** | Deposita o dinheiro acima de `reserva_dinheiro`. ⚠️ O jogo cobra 10% de taxa por depósito, por isso vem desligado. |
+| **Hospital** | Cura abaixo de `vida_minima`, com limite de cliques para não travar sem dinheiro. |
+| **Robustez** | Fecha popups do jogo, refaz o login se a sessão cair e só para depois de 5 erros seguidos. |
 
-* def check_stamina(self):  💚
-    - Verifica a quantidade de stamina disponível.  
-    - Checks the available stamina.  
+### ⚙️ Configuração / Settings (`config.json`)
 
+Qualquer chave omitida usa o padrão de `CONFIG_PADRAO` em `scriptMobster.py`.
 
-* def check_life(self):  ❤️
-    - Verifica a quantidade de vida disponível.  
-    - Checks the available life/health.  
+| Chave | Padrão | |
+|---|---|---|
+| `headless` | `false` | Chrome sem janela |
+| `max_ciclos` | `40000` | Limite de ciclos |
+| `atacar_hitlist` | `true` | Ataca a hitlist |
+| `alvo_id` | `null` | ID de um player da hitlist |
+| `fazer_missoes` | `true` | Missões quando falta stamina |
+| `missao_id` | `2` | ID da missão |
+| `missao_repeticoes` | `50` | 1, 10, 25, 50, 100, 250, 500, 1000 ou 10000 por clique |
+| `missao_max_rodadas` | `10` | Cliques em "Do Mission Again" por pausa |
+| `depositar_banco` | `false` | Deposita no banco (taxa de 10%) |
+| `reserva_dinheiro` | `1000000000000` | Dinheiro mantido na mão |
+| `vida_minima` | `390` | Cura abaixo disso |
+| `max_cliques_cura` | `20` | Limite de cliques no Heal |
+| `nivel_extra_alvo` | `60` | Ataca até o seu nível + isso |
+| `nivel_maximo_alvo` | `null` | Nível máximo fixo (substitui o cálculo acima) |
+| `dias_expirar_fortes` | `3` | Dias até tentar de novo quem venceu você |
+| `estatisticas_a_cada` | `10` | Resumo da sessão a cada N ciclos |
 
+### ⚠️ Aviso / Disclaimer
 
-* def access_iframe(self):  👨‍💻
-    - Acessa um iframe na página.  
-    - Accesses an iframe on the page.  
+Bots costumam violar os termos de uso de jogos online e podem levar ao banimento da conta. Use por sua conta e risco.
 
-
-* def exit_iframe(self):  🚪
-    - Sai do iframe e retorna à página principal.  
-    - Exits the iframe and returns to the main page.  
-
-
-* def get_login_password(self):  🗃️
-    - Obtém o login e a senha do usuário.  
-    - Retrieves the user's login and password.  
-
-
-* def find_user_to_attack(self):  📜
-    - Encontra um jogador adequado para atacar.  
-    - Finds a suitable player to attack.  
-
-
-* def check_attack_status(self):  👀
-    - Verifica o status do ataque atual.  
-    - Checks the status of the current attack.  
-
-
-* def save_strong_players_list(self):  🧾
-    - Salva a lista de jogadores fortes que voce já atacou e perdeu.  
-    - Saves the list of strong players you've attacked and lost to.  
-
-
-* def load_strong_players_list(self):  🧾
-    - Carrega a lista de jogadores fortes.  
-    - Loads the list of strong players.  
-
-
-* def attack_wanted_players(self):  ⚔️
-    - Ataca jogadores procurados na hitlist.  
-    - Attacks wanted players on the hitlist.  
+Bots usually violate online games' terms of service and may get the account banned. Use at your own risk.
