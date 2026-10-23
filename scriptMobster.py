@@ -24,7 +24,7 @@ CONFIG_PADRAO = {
     "atacar_hitlist": True,             # Ataca os procurados da hitlist
     "alvo_id": None,                    # ID de qualquer player para atacar pelo perfil (tem prioridade sobre a hitlist)
     "alvo_parar_na_derrota": True,      # Para de atacar o alvo no ciclo em que perder
-    "fazer_missoes": True,              # Gasta a energia na missao "missao_id" enquanto falta stamina
+    "fazer_missoes": True,              # Gasta a energia na missao "missao_id" quando o ciclo nao atacou ninguem
     "vida_minima": 390,                 # Abaixo disso o bot cura
     "nivel_extra_alvo": 60,             # Ataca players ate o seu nivel + esse valor
     "nivel_maximo_alvo": None,          # Se preenchido, usa esse nivel fixo no lugar do calculo acima
