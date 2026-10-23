@@ -33,7 +33,7 @@ Opens `http://127.0.0.1:8765`. Start/stop the bot, toggle each action, tune para
 .venv/bin/python scriptMobster.py                # usa config.json (ou os padrões)
 .venv/bin/python scriptMobster.py --headless     # Chrome sem janela
 .venv/bin/python scriptMobster.py --ciclos 100   # para depois de 100 ciclos
-.venv/bin/python scriptMobster.py --alvo 151174  # ataca só esse player quando ele estiver na hitlist
+.venv/bin/python scriptMobster.py --alvo 151174  # ataca esse player pelo perfil dele
 ```
 
 O log também é gravado em `bot.log`. / The log is also written to `bot.log`.
@@ -46,7 +46,7 @@ Cada ciclo: coleta os bônus grátis (no intervalo configurado) → cura se a vi
 |---|---|
 | **Hitlist** | Ataca os procurados com maior recompensa primeiro, até o seu nível + `nivel_extra_alvo`, ignorando MEGA. Repete o ataque enquanto o "Attack Again" aparecer. |
 | **Players fortes** | Quem venceu você vai para `LIST_PLAYERS_STRONGS.txt` e é ignorado por `dias_expirar_fortes` dias. |
-| **Alvo específico** | Com `alvo_id`, ataca só esse player quando ele estiver na hitlist (o ID aparece no perfil, `seePage_<id>`). |
+| **Alvo específico** | Com `alvo_id`, ataca qualquer player pelo botão "Attack" do perfil dele (não precisa estar na hitlist), repetindo enquanto houver stamina. Se ele estiver morto ou no hospital, o bot aguarda e tenta de novo. O ID aparece no perfil (`seePage_<id>`). |
 | **Missões** | Sem stamina, gasta a energia na missão `missao_id`, escolhida pelo nome no painel. Usa a maior quantidade de repetições que a energia paga, até `missao_repeticoes`. |
 | **Bônus grátis** | Clica em "2000 ENERGY" e "DAILY BONUS" da página inicial ao iniciar e a cada `bonus_intervalo_min` minutos, mostrando a resposta do jogo. Os caça-níqueis SILVER/GOLD/PLATINUM gastam tokens e não são usados. |
 | **Banco** | Deposita o dinheiro acima de `reserva_dinheiro`. ⚠️ O jogo cobra 10% de taxa por depósito, por isso vem desligado. |
@@ -62,7 +62,8 @@ Qualquer chave omitida usa o padrão de `CONFIG_PADRAO` em `scriptMobster.py`.
 | `headless` | `false` | Chrome sem janela |
 | `max_ciclos` | `40000` | Limite de ciclos |
 | `atacar_hitlist` | `true` | Ataca a hitlist |
-| `alvo_id` | `null` | ID de um player da hitlist |
+| `alvo_id` | `null` | ID de qualquer player para atacar pelo perfil |
+| `alvo_parar_na_derrota` | `true` | Para de atacar o alvo no ciclo em que perder |
 | `fazer_missoes` | `true` | Missões quando falta stamina |
 | `missao_id` | `2` | ID da missão |
 | `missao_repeticoes` | `50` | Máximo de repetições por clique (1, 10, 25, 50, 100, 250, 500, 1000 ou 10000) |

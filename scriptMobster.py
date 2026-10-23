@@ -22,7 +22,8 @@ CONFIG_PADRAO = {
     "headless": False,
     "max_ciclos": 40000,
     "atacar_hitlist": True,             # Ataca os procurados da hitlist
-    "alvo_id": None,                    # ID de um player da hitlist para atacar so ele (tem prioridade sobre a hitlist toda)
+    "alvo_id": None,                    # ID de qualquer player para atacar pelo perfil (tem prioridade sobre a hitlist)
+    "alvo_parar_na_derrota": True,      # Para de atacar o alvo no ciclo em que perder
     "fazer_missoes": True,              # Gasta a energia na missao "missao_id" enquanto falta stamina
     "vida_minima": 390,                 # Abaixo disso o bot cura
     "nivel_extra_alvo": 60,             # Ataca players ate o seu nivel + esse valor
@@ -197,19 +198,24 @@ class MobsterBot:
         self.close_popups()
         WebDriverWait(self.driver, 15).until(ec.element_to_be_clickable((By.ID, tab_id))).click()
 
-    def close_popups(self):
+    def close_popups(self, silencioso=False):
         # Fecha popups (fancybox) do jogo que ficam por cima da pagina e bloqueiam os cliques
         overlay = self.driver.find_elements(By.ID, "fancybox-overlay")
         if not overlay or not overlay[0].is_displayed():
             return
 
-        log.info(Fore.YELLOW + "Fechando popup do jogo." + Fore.RESET)
-        fechar = self.driver.find_elements(By.ID, "fancybox-close")
-        if fechar and fechar[0].is_displayed():
-            fechar[0].click()
-        else:
-            ActionChains(self.driver).send_keys(Keys.ESCAPE).perform()
-        WebDriverWait(self.driver, 10).until(ec.invisibility_of_element_located((By.ID, "fancybox-overlay")))
+        if not silencioso:
+            log.info(Fore.YELLOW + "Fechando popup do jogo." + Fore.RESET)
+        def fechar(driver):
+            # Fecha pelo proprio fancybox do jogo, repetindo: durante a animacao de abertura ele ignora o close
+            try:
+                driver.execute_script("$.fancybox.close()")
+            except Exception:
+                ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+            overlay = driver.find_elements(By.ID, "fancybox-overlay")
+            return not overlay or not overlay[0].is_displayed()
+
+        WebDriverWait(self.driver, 10, poll_frequency=0.5).until(fechar)
 
     def hitlist_players(self):
         self.access_iframe()
@@ -338,8 +344,7 @@ class MobsterBot:
             self.stats["vitorias"] += 1
             return False
 
-    def attack_wanted_players(self, alvo_id=None):
-        # Com alvo_id, ataca so esse player (se ele estiver na hitlist), sem os filtros de nivel e MEGA.
+    def attack_wanted_players(self):
         # Retorna True se atacou alguem
         atacou = False
         try:
@@ -347,14 +352,9 @@ class MobsterBot:
 
             WebDriverWait(self.driver, 15).until(ec.presence_of_element_located((By.XPATH, "//div[@id='content']/div[7]")))  # Lista de procurados
             procurados = self.driver.find_elements(By.CLASS_NAME, "bountied_hunter_row")  # Pegando os elementos dentro da lista de procurados
-            if alvo_id:
-                procurados = [p for p in procurados if p.get_attribute("id") == f"bounty_{int(alvo_id)}"]
 
             if not procurados:
-                if alvo_id:
-                    log.info(Fore.YELLOW + f"O alvo {alvo_id} não está na hitlist agora." + Fore.RESET)
-                else:
-                    log.info(Fore.RED + "Lista de players procurados vazia !" + Fore.RESET)
+                log.info(Fore.RED + "Lista de players procurados vazia !" + Fore.RESET)
                 self.exit_iframe()
                 return False
 
@@ -368,11 +368,7 @@ class MobsterBot:
 
             for procurado in procurados:
                 try:
-                    nome = procurado.find_element(By.CLASS_NAME, "bounty_name")
-                    PLAYER_ALVO = nome.text.strip()
-                    if PLAYER_ALVO == "" and alvo_id:
-                        # Linha escondida na hitlist: o alvo escolhido e atacado mesmo assim
-                        PLAYER_ALVO = nome.get_attribute("textContent").strip()
+                    PLAYER_ALVO = procurado.find_element(By.CLASS_NAME, "bounty_name").text.strip()
 
                     if PLAYER_ALVO == "":
                         continue
@@ -386,13 +382,12 @@ class MobsterBot:
                     NIVEL_PLAYER_ALVO = numero(nivel.group(1)) if nivel else 0
                     self.PLAYER_ALVO = " ".join(PLAYER_ALVO.replace("Level:", " Level:").split())
 
-                    if not alvo_id:
-                        if NIVEL_PLAYER_ALVO >= nivel_maximo or "MEGA" in self.PLAYER_ALVO.upper():
-                            log.info(" O player não vai ser atacado: " + Fore.RED + Style.BRIGHT + f"{self.PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
-                            continue
+                    if NIVEL_PLAYER_ALVO >= nivel_maximo or "MEGA" in self.PLAYER_ALVO.upper():
+                        log.info(" O player não vai ser atacado: " + Fore.RED + Style.BRIGHT + f"{self.PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
+                        continue
 
-                        if self.is_strong_player():
-                            continue
+                    if self.is_strong_player():
+                        continue
 
                     log.info(Fore.YELLOW + Style.BRIGHT + f"Alvo selecionado: {self.PLAYER_ALVO} ({procurado.find_element(By.CLASS_NAME, 'bounty_amount').get_attribute('textContent')})" + Fore.RESET + Style.RESET_ALL)
                     botao_attack = procurado.find_element(By.XPATH, ".//a[contains(@class, 'button_blue')]")
@@ -435,6 +430,96 @@ class MobsterBot:
             log.info(Fore.RED + f"Erro ao carregar a lista de players: {resumo_erro(e)}" + Fore.RESET)
             self.exit_iframe()
         return atacou
+
+    def attack_target(self, player_id):
+        # Ataca qualquer player pelo botao "Attack" do perfil dele, repetindo enquanto tiver stamina.
+        # Retorna True se chegou a atacar
+        player_id = int(player_id)
+        self.access_iframe()
+        try:
+            self.close_popups()
+            self.driver.execute_script(f"iFold = 0; GetPage('seePage_{player_id}')")
+            nome = WebDriverWait(self.driver, 15).until(ec.visibility_of_element_located((By.ID, "myname"))).text
+            self.PLAYER_ALVO = nome.replace("'s Stats", "").strip()
+
+            if self.driver.find_elements(By.XPATH, "//span[contains(@onclick, 'healdead') and contains(., 'Raise from Dead')]"):
+                log.info(Fore.YELLOW + f"O alvo {self.PLAYER_ALVO} está morto, aguardando ele voltar." + Fore.RESET)
+                return False
+
+            botao_xpath = f"//span[normalize-space()='Attack' and contains(@onclick, '({player_id},')]"
+            if not self.driver.find_elements(By.XPATH, botao_xpath):
+                log.info(Fore.RED + f"Não achei o botão de ataque no perfil {player_id}." + Fore.RESET)
+                return False
+
+            log.info(Fore.YELLOW + Style.BRIGHT + f"Atacando o alvo {self.PLAYER_ALVO} (id {player_id})" + Fore.RESET + Style.RESET_ALL)
+            atacou = False
+            while self.check_stamina() > 0:
+                # Sempre ataca pelo botao do perfil; o resultado pode vir no perfil ou num popup
+                self.close_popups(silencioso=True)
+                botoes = self.driver.find_elements(By.XPATH, botao_xpath)
+                if not botoes:
+                    break
+                # O clique dispara o ataque (ajax); limpa o resultado anterior antes da resposta chegar
+                self.driver.execute_script(
+                    "iFold = 0; arguments[0].click(); var a = document.getElementById('profile_attack'); if (a) a.innerHTML = '';", botoes[0])
+                resultado = self.wait_attack_result()
+                if resultado is None:
+                    break
+                if atacou:
+                    self.stats["repeticoes"] += 1
+                atacou = True
+                venceu, mensagem = resultado
+                if venceu:
+                    self.stats["vitorias"] += 1
+                    log.info(Fore.GREEN + Style.BRIGHT + f"Ataque ao {self.PLAYER_ALVO}: {mensagem}" + Fore.RESET + Style.RESET_ALL)
+                else:
+                    self.stats["derrotas"] += 1
+                    log.info(Fore.RED + Style.BRIGHT + f"Ataque ao {self.PLAYER_ALVO}: {mensagem}" + Fore.RESET + Style.RESET_ALL)
+
+                self.close_popups(silencioso=True)
+                self.heal_attack_again()
+                if not venceu and self.config["alvo_parar_na_derrota"]:
+                    break
+            return atacou
+        finally:
+            self.exit_iframe()
+
+    def wait_attack_result(self):
+        # O jogo mostra o resultado em #profile_attack ou, em caso de erro, num popup. Retorna (venceu, mensagem) ou None
+        def pronto(driver):
+            area = driver.find_elements(By.ID, "profile_attack")
+            if area and area[0].is_displayed() and area[0].text.strip():
+                return "perfil"
+            overlay = driver.find_elements(By.ID, "fancybox-overlay")
+            if overlay and overlay[0].is_displayed():
+                return "popup"
+            return False
+
+        try:
+            onde = WebDriverWait(self.driver, 15).until(pronto)
+        except TimeoutException:
+            log.info(Fore.RED + "O jogo não respondeu ao ataque." + Fore.RESET)
+            return None
+
+        if onde == "popup":
+            try:
+                texto = WebDriverWait(self.driver, 5).until(
+                    lambda driver: " ".join(driver.find_element(By.ID, "fancybox-content").text.split()))
+            except TimeoutException:
+                texto = ""
+        else:
+            texto = " ".join(self.driver.find_element(By.ID, "profile_attack").text.split())
+        texto = texto.replace("Attack Again", "").replace("Show Details", "").strip()
+
+        if "Successo" not in texto and "Insuccesso" not in texto:
+            # Ex.: "This mobster is in the hospital. Punch or Come back later.."
+            log.info(Fore.YELLOW + f"O jogo recusou o ataque: {texto or 'sem mensagem'}" + Fore.RESET)
+            self.close_popups(silencioso=True)
+            return None
+
+        # Resumo: "Successo! ... You won the fight dealing 53 to X while taking 1. You gained $4,559,617 and 33 experience."
+        resumo = re.search(r"You (won|lost).*", texto)
+        return "Insuccesso" not in texto, (("Successo! " if "Insuccesso" not in texto else "Insuccesso! ") + (resumo.group(0) if resumo else texto))[:220]
 
     # --------------------------------------------------- energia e dinheiro
 
@@ -620,9 +705,11 @@ def run_bot(config, parar=None, ao_iniciar=None):
                 scriptMobster.heal()
                 stamina = scriptMobster.update_status()["stamina"]
 
-                if stamina > 0 and (config["alvo_id"] or config["atacar_hitlist"]):
+                if stamina > 0 and config["alvo_id"]:
+                    atacou = scriptMobster.attack_target(config["alvo_id"])
+                elif stamina > 0 and config["atacar_hitlist"]:
                     scriptMobster.hitlist_players()
-                    atacou = scriptMobster.attack_wanted_players(config["alvo_id"])
+                    atacou = scriptMobster.attack_wanted_players()
 
                 if not atacou:
                     scriptMobster.do_missions()
@@ -669,7 +756,7 @@ def main():
     parser.add_argument("--config", default="config.json", help="arquivo de configuração (padrão: config.json)")
     parser.add_argument("--headless", action="store_true", help="roda o Chrome sem janela")
     parser.add_argument("--ciclos", type=int, help="quantidade máxima de ciclos")
-    parser.add_argument("--alvo", type=int, help="ID de um player para atacar só ele quando estiver na hitlist")
+    parser.add_argument("--alvo", type=int, help="ID de qualquer player para atacar pelo perfil")
     args = parser.parse_args()
 
     config = carregar_config(args.config)

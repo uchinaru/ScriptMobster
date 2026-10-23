@@ -253,8 +253,11 @@ PAGINA = r"""<!doctype html>
 
       <div class="acao">
         <div class="chave"></div>
-        <div class="info"><b>Alvo específico</b><small>Ataca só esse player quando ele estiver na hitlist, sem os filtros de nível. Preenchido, tem prioridade sobre a hitlist toda.</small>
-          <div class="campos"><label>ID do alvo<input type="number" data-cfg="alvo_id" placeholder="nenhum"></label></div>
+        <div class="info"><b>Alvo específico</b><small>Ataca qualquer player pelo perfil dele, repetindo enquanto tiver stamina. O ID aparece no perfil (seePage_ID). Preenchido, tem prioridade sobre a hitlist.</small>
+          <div class="campos">
+            <label>ID do alvo<input type="number" data-cfg="alvo_id" placeholder="nenhum"></label>
+            <label style="flex-direction:row;align-items:center;gap:6px;margin-top:14px"><input type="checkbox" data-cfg="alvo_parar_na_derrota"> parar se perder</label>
+          </div>
         </div>
       </div>
 
