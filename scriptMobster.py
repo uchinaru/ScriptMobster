@@ -2,7 +2,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as ec
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
@@ -38,6 +38,32 @@ CONFIG_PADRAO = {
 }
 
 ARQUIVO_FORTES = "LIST_PLAYERS_STRONGS.txt"
+ARQUIVO_MISSOES = "missoes.json"
+REPETICOES_MISSAO = [1, 10, 25, 50, 100, 250, 500, 1000, 10000]  # Opcoes do "Do Mission Again"
+
+# Le todas as missoes da aba Missions, inclusive as das cidades escondidas
+MISSOES_JS = """
+const vistos = new Set();
+return [...document.querySelectorAll(".mblock")].flatMap(b => {
+  const id = b.id;
+  if (!/^\\d+$/.test(id) || vistos.has(id)) return [];
+  vistos.add(id);
+  const txt = s => (document.getElementById(s + "-" + id) || {}).textContent || "";
+  const head = document.getElementById("misshead-" + id);
+  const pct = head ? [...head.querySelectorAll("font")].map(f => f.textContent.trim()).find(t => /%$/.test(t)) : "";
+  const bloco = b.closest("[id^='mission-list-block-']");
+  return [{
+    id: Number(id),
+    nome: head && head.querySelector("a") ? head.querySelector("a").textContent.trim() : "",
+    cidade: bloco ? bloco.id.replace("mission-list-block-", "") : "",
+    energia: Number(txt("ereq").replace(/\\D/g, "")),
+    dinheiro: txt("misscash").trim(),
+    exp: txt("missexp").trim(),
+    requisito: txt("mobreq").trim(),
+    maestria: pct || "",
+  }];
+});
+"""
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -105,6 +131,7 @@ class MobsterBot:
         self.stats = {"vitorias": 0, "derrotas": 0, "repeticoes": 0, "cliques_cura": 0, "missoes": 0, "depositos": 0}
         self.inicio = datetime.now()
         self.status = {}
+        self.trava = threading.Lock()  # Evita que o painel e o loop usem o navegador ao mesmo tempo
 
         chrome_options = Options()
         if config["headless"]:
@@ -408,6 +435,23 @@ class MobsterBot:
 
     # --------------------------------------------------- energia e dinheiro
 
+    def read_missions(self):
+        # Precisa estar dentro do iframe com a aba Missions aberta
+        missoes = self.driver.execute_script(MISSOES_JS)
+        with open(ARQUIVO_MISSOES, "w", encoding="utf-8") as arquivo:
+            json.dump({"atualizado": datetime.now().isoformat(timespec="seconds"), "missoes": missoes}, arquivo, ensure_ascii=False)
+        return missoes
+
+    def refresh_missions(self):
+        self.access_iframe()
+        try:
+            self.open_tab("I2")
+            WebDriverWait(self.driver, 15).until(ec.presence_of_element_located((By.CLASS_NAME, "mblock")))
+            missoes = self.read_missions()
+            log.info(Fore.LIGHTMAGENTA_EX + f"Lista de missões atualizada: {len(missoes)} missões." + Fore.RESET)
+        finally:
+            self.exit_iframe()
+
     def do_missions(self):
         # Gasta a energia numa missao enquanto espera a stamina voltar
         missao = self.config["missao_id"]
@@ -420,7 +464,7 @@ class MobsterBot:
             botao = WebDriverWait(self.driver, 15).until(ec.presence_of_element_located(
                 (By.XPATH, f"//div[@id='{missao}' and @class='mblock']//a[contains(@class,'btn')]")))
             energia_minima = numero(self.driver.find_element(By.ID, f"ereq-{missao}").get_attribute("textContent"))
-            repeticoes = self.config["missao_repeticoes"]
+            self.read_missions()
 
             if self.check_energy() < energia_minima:
                 return
@@ -430,10 +474,21 @@ class MobsterBot:
             self.stats["missoes"] += 1
 
             for _ in range(self.config["missao_max_rodadas"]):
-                de_novo = WebDriverWait(self.driver, 15).until(ec.presence_of_element_located(
-                    (By.XPATH, "//div[@id='popup']//a[contains(., 'Do Mission Again')]")))
-                if self.check_energy() < energia_minima * repeticoes:
+                try:
+                    de_novo = WebDriverWait(self.driver, 15).until(ec.presence_of_element_located(
+                        (By.XPATH, "//div[@id='popup']//a[contains(., 'Do Mission Again')]")))
+                except TimeoutException:
+                    # Sem "Do Mission Again": a missao falhou (ex.: falta item ou nivel). Mostra o motivo do jogo
+                    motivo = " ".join(self.driver.find_element(By.ID, "popup").text.split())[:200]
+                    log.info(Fore.RED + f"Não consegui repetir a missão {missao}: {motivo or 'sem resposta do jogo'}" + Fore.RESET)
                     break
+
+                # Usa a maior quantidade de repeticoes que a energia paga, ate o limite configurado
+                energia = self.check_energy()
+                cabem = [r for r in REPETICOES_MISSAO if r <= self.config["missao_repeticoes"] and r * energia_minima <= energia]
+                if not cabem:
+                    break
+                repeticoes = cabem[-1]
                 Select(self.driver.find_element(By.ID, "xm")).select_by_visible_text(f"{repeticoes:,}")
                 de_novo.click()
                 self.stats["missoes"] += repeticoes
@@ -471,10 +526,12 @@ class MobsterBot:
         self.access_iframe()
         try:
             self.status = {
+                "nome": self.read_stat("mystats_name").strip(),
                 "vida": numero(self.read_stat("healthStater")),
                 "stamina": self.check_stamina(),
                 "energia": self.check_energy(),
                 "nivel": self.my_level(),
+                "mob": numero(self.read_stat("hgsstat")),
                 "proxima_stamina": self.read_stat("stamina_timer"),
             }
         finally:
@@ -510,11 +567,20 @@ def run_bot(config, parar=None, ao_iniciar=None):
 
     try:
         scriptMobster.login()
+        try:
+            # Ao iniciar, le os dados do personagem e a lista de missoes
+            st = scriptMobster.update_status()
+            log.info(Fore.GREEN + Style.BRIGHT + f"Personagem: {st['nome']} | Nível {st['nivel']} | Mob {st['mob']} | "
+                     + f"Vida {st['vida']} | Stamina {st['stamina']} | Energia {st['energia']:,}" + Fore.RESET + Style.RESET_ALL)
+            scriptMobster.refresh_missions()
+        except Exception as e:
+            log.info(Fore.RED + f"Não consegui ler os dados iniciais: {resumo_erro(e)}" + Fore.RESET)
 
         contador = 0
         erros_seguidos = 0
         while contador < config["max_ciclos"] and not parar.is_set():
             atacou = False
+            scriptMobster.trava.acquire()
             try:
                 scriptMobster.ensure_session()
                 scriptMobster.heal()
@@ -538,6 +604,8 @@ def run_bot(config, parar=None, ao_iniciar=None):
                     raise
                 parar.wait(5)
                 continue
+            finally:
+                scriptMobster.trava.release()
 
             contador = contador + 1
             log.info(Fore.LIGHTCYAN_EX + Style.BRIGHT + f"Contador em {contador}" + Fore.RESET + Style.RESET_ALL)
