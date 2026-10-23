@@ -40,7 +40,7 @@ O log também é gravado em `bot.log`. / The log is also written to `bot.log`.
 
 ### ⚔️ O que o bot faz / What the bot does
 
-Cada ciclo: cura se a vida estiver baixa → ataca (hitlist ou alvo) se tiver stamina → senão faz missões com a energia → deposita no banco (se ligado) → espera o próximo ponto de stamina.
+Cada ciclo: coleta os bônus grátis (no intervalo configurado) → cura se a vida estiver baixa → ataca (hitlist ou alvo) se tiver stamina → senão faz missões com a energia → deposita no banco (se ligado) → espera o próximo ponto de stamina.
 
 | Ação | Descrição |
 |---|---|
@@ -48,6 +48,7 @@ Cada ciclo: cura se a vida estiver baixa → ataca (hitlist ou alvo) se tiver st
 | **Players fortes** | Quem venceu você vai para `LIST_PLAYERS_STRONGS.txt` e é ignorado por `dias_expirar_fortes` dias. |
 | **Alvo específico** | Com `alvo_id`, ataca só esse player quando ele estiver na hitlist (o ID aparece no perfil, `seePage_<id>`). |
 | **Missões** | Sem stamina, gasta a energia na missão `missao_id`, escolhida pelo nome no painel. Usa a maior quantidade de repetições que a energia paga, até `missao_repeticoes`. |
+| **Bônus grátis** | Clica em "2000 ENERGY" e "DAILY BONUS" da página inicial ao iniciar e a cada `bonus_intervalo_min` minutos, mostrando a resposta do jogo. Os caça-níqueis SILVER/GOLD/PLATINUM gastam tokens e não são usados. |
 | **Banco** | Deposita o dinheiro acima de `reserva_dinheiro`. ⚠️ O jogo cobra 10% de taxa por depósito, por isso vem desligado. |
 | **Hospital** | Cura abaixo de `vida_minima`, com limite de cliques para não travar sem dinheiro. |
 | **Robustez** | Fecha popups do jogo, refaz o login se a sessão cair e só para depois de 5 erros seguidos. |
@@ -73,6 +74,8 @@ Qualquer chave omitida usa o padrão de `CONFIG_PADRAO` em `scriptMobster.py`.
 | `nivel_extra_alvo` | `60` | Ataca até o seu nível + isso |
 | `nivel_maximo_alvo` | `null` | Nível máximo fixo (substitui o cálculo acima) |
 | `dias_expirar_fortes` | `3` | Dias até tentar de novo quem venceu você |
+| `coletar_bonus` | `true` | Coleta os bônus grátis da página inicial |
+| `bonus_intervalo_min` | `60` | Intervalo entre tentativas de coleta |
 | `estatisticas_a_cada` | `10` | Resumo da sessão a cada N ciclos |
 
 ### ⚠️ Aviso / Disclaimer

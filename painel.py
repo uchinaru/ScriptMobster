@@ -280,6 +280,13 @@ PAGINA = r"""<!doctype html>
       </div>
 
       <div class="acao">
+        <label class="chave"><input type="checkbox" data-cfg="coletar_bonus"><span></span></label>
+        <div class="info"><b>Coletar bônus grátis</b><small>Botões "2000 ENERGY" e "DAILY BONUS" da página inicial. Coleta ao iniciar e tenta de novo no intervalo.</small>
+          <div class="campos"><label>Intervalo (min)<input type="number" data-cfg="bonus_intervalo_min"></label></div>
+        </div>
+      </div>
+
+      <div class="acao">
         <label class="chave"><input type="checkbox" data-cfg="depositar_banco"><span></span></label>
         <div class="info"><b>Depositar no banco</b><small class="aviso">O jogo cobra 10% de taxa em cada depósito.</small>
           <div class="campos"><label>Manter na mão ($)<input type="number" data-cfg="reserva_dinheiro"></label></div>
@@ -307,6 +314,7 @@ PAGINA = r"""<!doctype html>
         <div class="stat"><b id="t-cliques_cura">0</b><span>Curas</span></div>
         <div class="stat"><b id="t-missoes">0</b><span>Missões</span></div>
         <div class="stat"><b id="t-depositos">0</b><span>Depósitos</span></div>
+        <div class="stat"><b id="t-bonus">0</b><span>Bônus</span></div>
       </div>
       <h2 style="margin-top:16px">Log</h2>
       <pre id="log"></pre>

@@ -35,6 +35,8 @@ CONFIG_PADRAO = {
     "depositar_banco": False,           # Atencao: o banco cobra 10% de taxa em cada deposito
     "reserva_dinheiro": 1000000000000,  # Dinheiro que fica na mao para pagar o hospital
     "estatisticas_a_cada": 10,          # Mostra o resumo da sessao a cada N ciclos
+    "coletar_bonus": True,              # Coleta os bonus gratis da pagina inicial (2000 ENERGY e DAILY BONUS)
+    "bonus_intervalo_min": 60,          # Tenta coletar de novo a cada N minutos
 }
 
 ARQUIVO_FORTES = "LIST_PLAYERS_STRONGS.txt"
@@ -128,9 +130,10 @@ class MobsterBot:
         self.USER_PASSWORD = ''
         self.PLAYER_ALVO = ''
         self.STRONG_PLAYERS = self.load_strong_players_list()
-        self.stats = {"vitorias": 0, "derrotas": 0, "repeticoes": 0, "cliques_cura": 0, "missoes": 0, "depositos": 0}
+        self.stats = {"vitorias": 0, "derrotas": 0, "repeticoes": 0, "cliques_cura": 0, "missoes": 0, "depositos": 0, "bonus": 0}
         self.inicio = datetime.now()
         self.status = {}
+        self.ultimo_bonus = None
         self.trava = threading.Lock()  # Evita que o painel e o loop usem o navegador ao mesmo tempo
 
         chrome_options = Options()
@@ -435,6 +438,35 @@ class MobsterBot:
 
     # --------------------------------------------------- energia e dinheiro
 
+    def collect_bonuses(self):
+        # Botoes gratis da aba Main. O jogo responde num popup "Successo!" ou "Insuccesso!" com o motivo
+        if not self.config["coletar_bonus"]:
+            return
+        intervalo = self.config["bonus_intervalo_min"] * 60
+        if self.ultimo_bonus and (datetime.now() - self.ultimo_bonus).total_seconds() < intervalo:
+            return
+        self.ultimo_bonus = datetime.now()
+
+        self.access_iframe()
+        try:
+            self.open_tab("I1")
+            for texto in ["2000 ENERGY", "DAILY BONUS"]:
+                botao = WebDriverWait(self.driver, 15).until(ec.presence_of_element_located(
+                    (By.XPATH, f"//a[contains(@onclick, 'bonusMe') and normalize-space()='{texto}']")))
+                self.driver.execute_script("iFold = 0; arguments[0].click()", botao)
+
+                resposta = WebDriverWait(self.driver, 15).until(ec.visibility_of_element_located((By.ID, "bonus")))
+                titulo = resposta.find_element(By.TAG_NAME, "h3").text.strip()
+                mensagem = " ".join(resposta.find_element(By.TAG_NAME, "p").text.split())
+                if titulo.startswith("Successo"):
+                    self.stats["bonus"] += 1
+                    log.info(Fore.GREEN + Style.BRIGHT + f"Bônus {texto} coletado: {mensagem}" + Fore.RESET + Style.RESET_ALL)
+                else:
+                    log.info(Fore.YELLOW + f"Bônus {texto} indisponível: {mensagem}" + Fore.RESET)
+                self.close_popups()
+        finally:
+            self.exit_iframe()
+
     def read_missions(self):
         # Precisa estar dentro do iframe com a aba Missions aberta
         missoes = self.driver.execute_script(MISSOES_JS)
@@ -545,7 +577,7 @@ class MobsterBot:
         duracao = str(datetime.now() - self.inicio).split(".")[0]
         log.info(Fore.LIGHTWHITE_EX + Style.BRIGHT
                  + f"Resumo ({duracao}): {s['vitorias']} vitórias, {s['derrotas']} derrotas ({taxa}), "
-                 + f"{s['repeticoes']} ataques repetidos, {s['cliques_cura']} curas, {s['missoes']} missões, {s['depositos']} depósitos"
+                 + f"{s['repeticoes']} ataques repetidos, {s['cliques_cura']} curas, {s['missoes']} missões, {s['depositos']} depósitos, {s['bonus']} bônus"
                  + Fore.RESET + Style.RESET_ALL)
 
 
@@ -573,6 +605,7 @@ def run_bot(config, parar=None, ao_iniciar=None):
             log.info(Fore.GREEN + Style.BRIGHT + f"Personagem: {st['nome']} | Nível {st['nivel']} | Mob {st['mob']} | "
                      + f"Vida {st['vida']} | Stamina {st['stamina']} | Energia {st['energia']:,}" + Fore.RESET + Style.RESET_ALL)
             scriptMobster.refresh_missions()
+            scriptMobster.collect_bonuses()
         except Exception as e:
             log.info(Fore.RED + f"Não consegui ler os dados iniciais: {resumo_erro(e)}" + Fore.RESET)
 
@@ -583,6 +616,7 @@ def run_bot(config, parar=None, ao_iniciar=None):
             scriptMobster.trava.acquire()
             try:
                 scriptMobster.ensure_session()
+                scriptMobster.collect_bonuses()
                 scriptMobster.heal()
                 stamina = scriptMobster.update_status()["stamina"]
 
