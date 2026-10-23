@@ -1,3 +1,6 @@
 /LIST_PLAYERS_STRONGS.txt
 /LOGIN.txt
 /.venv
+/config.json
+/bot.log
+__pycache__/
