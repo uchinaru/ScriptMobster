@@ -307,6 +307,8 @@ PAGINA = r"""<!doctype html>
       <div class="stat"><b id="s-vida">-</b><span>Vida</span></div>
       <div class="stat"><b id="s-stamina">-</b><span>Stamina</span></div>
       <div class="stat"><b id="s-energia">-</b><span>Energia</span></div>
+      <div class="stat"><b id="s-kills">-</b><span>Kills</span></div>
+      <div class="stat"><b id="s-mortes">-</b><span>Deaths</span></div>
     </div>
   </section>
 

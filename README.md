@@ -88,7 +88,7 @@ Abre `http://127.0.0.1:8765` no navegador (só acessível na sua máquina). Fech
 | Seção | O que tem |
 |---|---|
 | **Cabeçalho** | Nome do personagem, estado do bot (Parado / Rodando / Parando) e botões **Iniciar** e **Parar**. |
-| **Personagem** | Nível, mob, vida, stamina, tempo até o próximo ponto de stamina e energia, atualizados a cada ciclo. |
+| **Personagem** | Nível, mob, vida, stamina e energia, atualizados a cada ciclo, mais kills e deaths do perfil (lidos ao iniciar e a cada 10 minutos). |
 | **Ações** | Liga/desliga e parâmetros de cada ação: hitlist, alvo específico, missões, bônus grátis, banco e Chrome sem janela. |
 | **Missões** | Lista de todas as missões do jogo com busca por nome, ordenada pelo dinheiro médio por ponto de energia, mostrando cidade, energia, dinheiro e maestria. Missões bloqueadas pelo seu nível/mob ficam escondidas (marque "mostrar bloqueadas" para ver, com 🔒). A maioria das missões exige um item (marcadas com 🧰): ao selecionar uma, o painel mostra a imagem e o nome do item, e ❌ indica que a última tentativa falhou por falta dele. Marque "só sem item" para ver só as que não pedem item. O botão **Atualizar lista** relê as missões no jogo com o bot rodando. |
 | **Sessão** | Vitórias, derrotas, taxa de acerto, ataques repetidos, curas, missões, depósitos e bônus coletados desde o início. |

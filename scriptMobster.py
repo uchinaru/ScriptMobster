@@ -7,7 +7,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from colorama import init, Fore, Style
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import argparse
 import json
 import logging
@@ -185,6 +185,7 @@ class MobsterBot:
         self.inicio = datetime.now()
         self.status = {}
         self.ultimo_bonus = None
+        self.ultimo_perfil = None
         self.trava = threading.Lock()  # Evita que o painel e o loop usem o navegador ao mesmo tempo
 
         chrome_options = Options()
@@ -588,6 +589,24 @@ class MobsterBot:
 
     # --------------------------------------------------- energia e dinheiro
 
+    def update_profile(self, forcar=False):
+        # Kills e mortes so aparecem na aba My Mobster: le ao iniciar e depois a cada 10 minutos
+        if not forcar and self.ultimo_perfil and datetime.now() - self.ultimo_perfil < timedelta(minutes=10):
+            return
+        self.access_iframe()
+        try:
+            self.open_tab("I12")
+            WebDriverWait(self.driver, 15).until(
+                lambda d: "Kills:" in (d.execute_script("return document.getElementById('content').innerText") or ""))
+            texto = self.driver.execute_script("return document.getElementById('content').innerText")
+            for chave, rotulo in (("kills", "Kills"), ("mortes", "Deaths")):
+                valor = re.search(rf"{rotulo}:\s*([\d,]+)", texto)
+                if valor:
+                    self.status[chave] = numero(valor.group(1))
+            self.ultimo_perfil = datetime.now()
+        finally:
+            self.exit_iframe()
+
     def collect_bonuses(self):
         # Botoes gratis da aba Main. O jogo responde num popup "Successo!" ou "Insuccesso!" com o motivo
         if not self.config["coletar_bonus"]:
@@ -737,7 +756,8 @@ class MobsterBot:
         # Foto dos atributos do personagem, usada pelo painel
         self.access_iframe()
         try:
-            self.status = {
+            # update: mantem kills/mortes lidos do perfil
+            self.status.update({
                 "nome": self.read_stat("mystats_name").strip(),
                 "vida": numero(self.read_stat("healthStater")),
                 "stamina": self.check_stamina(),
@@ -745,7 +765,7 @@ class MobsterBot:
                 "nivel": self.my_level(),
                 "mob": numero(self.read_stat("hgsstat")),
                 "proxima_stamina": self.read_stat("stamina_timer"),
-            }
+            })
         finally:
             self.exit_iframe()
         return self.status
@@ -781,9 +801,10 @@ def run_bot(config, parar=None, ao_iniciar=None):
         scriptMobster.login()
         try:
             # Ao iniciar, le os dados do personagem e a lista de missoes
+            scriptMobster.update_profile(forcar=True)
             st = scriptMobster.update_status()
             log.info(Fore.GREEN + Style.BRIGHT + f"Personagem: {st['nome']} | Nível {st['nivel']} | Mob {st['mob']} | "
-                     + f"Vida {st['vida']} | Stamina {st['stamina']} | Energia {st['energia']:,}" + Fore.RESET + Style.RESET_ALL)
+                     + f"Vida {st['vida']} | Stamina {st['stamina']} | Energia {st['energia']:,} | Kills {st.get('kills', 0):,} | Mortes {st.get('mortes', 0):,}" + Fore.RESET + Style.RESET_ALL)
             scriptMobster.refresh_missions()
             scriptMobster.collect_bonuses()
         except Exception as e:
@@ -797,6 +818,7 @@ def run_bot(config, parar=None, ao_iniciar=None):
             try:
                 scriptMobster.ensure_session()
                 scriptMobster.collect_bonuses()
+                scriptMobster.update_profile()
                 scriptMobster.heal()
                 stamina = scriptMobster.update_status()["stamina"]
 
