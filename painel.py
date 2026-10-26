@@ -9,12 +9,27 @@ import json
 import logging
 import os
 import threading
+import urllib.parse
+import urllib.request
 import webbrowser
 
-from scriptMobster import ANSI, ARQUIVO_MISSOES, CONFIG_PADRAO, carregar_config, ler_login, log, resumo_erro, run_bot, salvar_login
+from scriptMobster import ANSI, ARQUIVO_MISSOES, CONFIG_PADRAO, carregar_config, ler_login, ler_missoes, log, resumo_erro, run_bot, salvar_login
 
 PORTA = 8765
 ARQUIVO_CONFIG = "config.json"
+HOST_IMAGENS = "images.playersrevenge.com"
+cache_imagens = {}
+
+
+def imagem_do_jogo(url):
+    # O servidor de imagens do jogo bloqueia hotlink: so entrega com o Referer do jogo
+    if urllib.parse.urlparse(url).hostname != HOST_IMAGENS:
+        raise ValueError("Imagem fora do jogo.")
+    if url not in cache_imagens:
+        pedido = urllib.request.Request(url, headers={"Referer": "https://app.playersrevenge.com/", "User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(pedido, timeout=10) as resposta:
+            cache_imagens[url] = (resposta.headers.get_content_type(), resposta.read())
+    return cache_imagens[url]
 
 
 class MemoriaLog(logging.Handler):
@@ -92,12 +107,20 @@ class Controle:
 
     def missoes(self):
         # Ultima lista lida pelo bot (fica salva para o painel funcionar com o bot parado)
-        if not os.path.exists(ARQUIVO_MISSOES):
-            return {"atualizado": None, "missoes": [], "atualizando": self.atualizando_missoes}
-        with open(ARQUIVO_MISSOES, "r", encoding="utf-8") as arquivo:
-            dados = json.load(arquivo)
+        dados = ler_missoes()
         dados["atualizando"] = self.atualizando_missoes
         return dados
+
+    def item_missao(self, missao_id):
+        # Busca no jogo o nome do item exigido pela missao (precisa do bot rodando)
+        if not self.rodando or not self.bot:
+            raise ValueError("Inicie o bot para consultar o item exigido.")
+        with self.bot.trava:
+            self.bot.access_iframe()
+            try:
+                return {"item": self.bot.mission_required_item(int(missao_id))}
+            finally:
+                self.bot.exit_iframe()
 
     def atualizar_missoes(self):
         # Pede ao bot para reler as missoes assim que ele terminar a acao atual
@@ -128,6 +151,8 @@ class Controle:
             "stats": bot.stats if bot else {},
             "status": bot.status if bot else {},
             "inicio": bot.inicio.strftime("%H:%M:%S") if bot and self.rodando else None,
+            # Versao do missoes.json: o painel recarrega a lista quando o bot regrava o arquivo
+            "missoes_versao": os.path.getmtime(ARQUIVO_MISSOES) if os.path.exists(ARQUIVO_MISSOES) else None,
             "log": list(self.log.linhas)[-150:],
         }
 
@@ -152,6 +177,17 @@ class Handler(BaseHTTPRequestHandler):
             self._responder(json.dumps(controle.estado(), ensure_ascii=False))
         elif self.path == "/api/missoes":
             self._responder(json.dumps(controle.missoes(), ensure_ascii=False))
+        elif self.path.startswith("/api/imagem?"):
+            try:
+                tipo, dados = imagem_do_jogo(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)["u"][0])
+            except Exception:
+                return self._responder("{}", status=404)
+            self.send_response(200)
+            self.send_header("Content-Type", tipo)
+            self.send_header("Content-Length", str(len(dados)))
+            self.send_header("Cache-Control", "max-age=86400")
+            self.end_headers()
+            self.wfile.write(dados)
         elif self.path == "/favicon.ico":
             self.send_response(204)
             self.end_headers()
@@ -174,6 +210,8 @@ class Handler(BaseHTTPRequestHandler):
                 controle.atualizar_config(corpo)
             elif self.path == "/api/login":
                 controle.atualizar_login(corpo)
+            elif self.path == "/api/missoes/item":
+                return self._responder(json.dumps(controle.item_missao(corpo.get("id")), ensure_ascii=False))
             elif self.path == "/api/missoes/atualizar":
                 controle.atualizar_missoes()
                 return self._responder(json.dumps(controle.missoes(), ensure_ascii=False))
@@ -234,6 +272,8 @@ PAGINA = r"""<!doctype html>
   .linha { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   button.leve { background:transparent; color:var(--txt); border:1px solid var(--borda); padding:4px 10px; font-weight:500; }
   #missao-info { font-size:12px; color:var(--sub); }
+  #missao-item { display:flex; gap:10px; align-items:center; font-size:12px; }
+  #missao-item img { width:60px; height:40px; object-fit:contain; background:#000; border-radius:4px; }
   .conta { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
   .conta label { font-size:12px; color:var(--sub); display:flex; flex-direction:column; gap:2px; flex:1; min-width:160px; }
   .conta input { padding:6px 8px; border:1px solid var(--borda); border-radius:6px; background:var(--bg); color:var(--txt); }
@@ -266,7 +306,6 @@ PAGINA = r"""<!doctype html>
       <div class="stat"><b id="s-mob">-</b><span>Mob</span></div>
       <div class="stat"><b id="s-vida">-</b><span>Vida</span></div>
       <div class="stat"><b id="s-stamina">-</b><span>Stamina</span></div>
-      <div class="stat"><b id="s-proxima_stamina">-</b><span>Próx. stamina</span></div>
       <div class="stat"><b id="s-energia">-</b><span>Energia</span></div>
     </div>
   </section>
@@ -301,12 +340,17 @@ PAGINA = r"""<!doctype html>
         <div class="info"><b>Missões com a energia</b><small>Roda quando não há stamina para atacar. Ordenadas pelo dinheiro médio por ponto de energia.</small>
           <div class="missao-escolha">
             <div class="linha">
-              <input type="search" id="missao-busca" placeholder="Buscar missão..." style="flex:1">
-              <label style="font-size:12px;color:var(--sub)"><input type="checkbox" id="missao-todas"> mostrar bloqueadas</label>
-              <button class="leve" id="missao-atualizar" title="Relê a lista no jogo (bot precisa estar rodando)">Atualizar lista</button>
+              <input type="search" id="missao-busca" placeholder="Buscar missão...">
             </div>
-            <select id="missao-select" size="6"></select>
+            <div class="linha">
+              <label style="font-size:12px;color:var(--sub)"><input type="checkbox" id="missao-todas"> mostrar bloqueadas</label>
+              <label style="font-size:12px;color:var(--sub)" title="463 das 524 missões pedem um item (arma, carro...) que você precisa ter"><input type="checkbox" id="missao-sem-item"> só sem item</label>
+              <button class="leve" id="missao-atualizar" style="margin-left:auto" title="Relê a lista no jogo (bot precisa estar rodando)">Atualizar lista</button>
+            </div>
+            <select id="missao-select" size="10"></select>
+            <small>🧰 exige item · ❌ última tentativa falhou · 🔒 bloqueada pelo nível/mob</small>
             <div id="missao-info"></div>
+            <div id="missao-item"></div>
           </div>
           <div class="campos">
             <label>Máx. repetições por clique<select data-cfg="missao_repeticoes">
@@ -373,6 +417,7 @@ function render(e) {
   $("#badge").textContent = e.parando ? "Parando..." : e.rodando ? "Rodando" : "Parado";
   $("#badge").classList.toggle("on", e.rodando && !e.parando);
   $("#iniciar").disabled = e.rodando;
+  rodando = e.rodando;
   $("#parar").disabled = !e.rodando || e.parando;
   $("#inicio").textContent = e.inicio ? "desde " + e.inicio : "";
 
@@ -396,7 +441,7 @@ function render(e) {
   const mudouPersonagem = (e.status.nivel || 0) !== nivelAtual || (e.status.mob || 0) !== mobAtual;
   if (e.status.nivel) { nivelAtual = e.status.nivel; mobAtual = e.status.mob || 0; }
   if (e.config.missao_id !== missaoAtual || mudouPersonagem) { missaoAtual = e.config.missao_id; renderMissoes(); }
-  if (e.rodando && !missoes.length) carregarMissoes();
+  if ((e.rodando && !missoes.length) || e.missoes_versao !== versaoMissoes) { versaoMissoes = e.missoes_versao; carregarMissoes(); }
 
   const log = $("#log"), noFim = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
   log.textContent = e.log.join("\n");
@@ -412,6 +457,7 @@ document.querySelectorAll("[data-cfg]").forEach(el => {
   });
 });
 // ---------- missoes
+let extras = {}, buscandoItem = null, rodando = false, versaoMissoes;
 let missoes = [], nivelAtual = 0, mobAtual = 0, missaoAtual = null, ultimaAtualizacao = null;
 const rotuloCidade = { newyork: "New York", chicago: "Chicago", neworleans: "New Orleans", lasvegas: "Las Vegas", seasonal: "Seasonal", upgrade: "Upgrade" };
 
@@ -432,38 +478,67 @@ function bloqueada(m) { const r = requisitos(m); return nivelAtual && (r.nivel >
 function renderMissoes() {
   const busca = $("#missao-busca").value.trim().toLowerCase();
   const todas = $("#missao-todas").checked;
-  const sel = $("#missao-select");
+  const semItem = $("#missao-sem-item").checked;
+  const sel = $("#missao-select"), rolagem = sel.scrollTop;
   sel.innerHTML = "";
   if (!missoes.length) {
     sel.innerHTML = '<option disabled>Inicie o bot uma vez para carregar as missões</option>';
     return;
   }
   const lista = missoes
-    .filter(m => (todas || !bloqueada(m) || m.id === missaoAtual) && (!busca || m.nome.toLowerCase().includes(busca) || String(m.id) === busca))
+    .filter(m => (todas || !bloqueada(m) || m.id === missaoAtual) && (!semItem || !m.item_img || m.id === missaoAtual) && (!busca || m.nome.toLowerCase().includes(busca) || String(m.id) === busca))
     .map(m => ({ ...m, porEnergia: m.energia ? mediaDinheiro(m) / m.energia : 0 }))
     .sort((a, b) => b.porEnergia - a.porEnergia);
   for (const m of lista) {
     const o = document.createElement("option");
     o.value = m.id;
-    o.textContent = `${m.nome} · ${rotuloCidade[m.cidade] || m.cidade} · ${m.energia} en · $${curto(mediaDinheiro(m))} · $${curto(m.porEnergia)}/en · ${m.maestria}` + (bloqueada(m) ? " 🔒" : "");
+    // Icones no inicio: o select corta o fim das linhas compridas
+    const icones = (extras[m.id]?.falha ? "❌" : "") + (m.item_img ? "🧰" : "") + (bloqueada(m) ? "🔒" : "");
+    o.textContent = (icones ? icones + " " : "") + `${m.nome} · ${rotuloCidade[m.cidade] || m.cidade} · ${m.energia} en · $${curto(mediaDinheiro(m))} · $${curto(m.porEnergia)}/en · ${m.maestria}`;
+    o.title = o.textContent;
     o.selected = m.id === missaoAtual;
     sel.appendChild(o);
   }
+  sel.scrollTop = rolagem;
   const m = missoes.find(x => x.id === missaoAtual);
   $("#missao-info").textContent = m
     ? `Selecionada: ${m.nome} (id ${m.id}) — ${m.energia} energia, $${m.dinheiro}, exp ${m.exp}, ${m.requisito} mob, maestria ${m.maestria}`
     : (missaoAtual ? `Selecionada: id ${missaoAtual}` : "Nenhuma missão selecionada");
   $("#missao-info").textContent += ultimaAtualizacao ? ` · lista de ${ultimaAtualizacao.replace("T", " ")}` : "";
+  renderItem(m);
+}
+function renderItem(m) {
+  const box = $("#missao-item"), ex = (m && extras[m.id]) || {};
+  box.innerHTML = "";
+  if (!m) return;
+  const linhas = [];
+  if (m.item_img) {
+    const img = document.createElement("img"); img.src = "/api/imagem?u=" + encodeURIComponent(m.item_img); img.alt = "item exigido"; box.appendChild(img);
+    linhas.push("Exige o item: " + (ex.item || (rodando ? "consultando..." : "inicie o bot para ver o nome")));
+    if (!ex.item && rodando && buscandoItem !== m.id) buscarItem(m.id);
+  } else {
+    linhas.push("Não exige item.");
+  }
+  if (ex.falha) linhas.push("❌ Última tentativa falhou: " + ex.falha);
+  const txt = document.createElement("div"); txt.textContent = linhas.join(" — "); box.appendChild(txt);
+}
+async function buscarItem(id) {
+  buscandoItem = id;
+  const d = await api("/api/missoes/item", { id });
+  if (d.erro) { buscandoItem = null; return; }
+  (extras[id] = extras[id] || {}).item = d.item || "(não informado pelo jogo)";
+  renderMissoes();
 }
 async function carregarMissoes() {
   const d = await api("/api/missoes");
-  missoes = d.missoes; ultimaAtualizacao = d.atualizado;
+  missoes = d.missoes; ultimaAtualizacao = d.atualizado; extras = d.extras || {};
   $("#missao-atualizar").textContent = d.atualizando ? "Atualizando..." : "Atualizar lista";
   renderMissoes();
   return d;
 }
 $("#missao-busca").addEventListener("input", renderMissoes);
 $("#missao-todas").addEventListener("change", renderMissoes);
+$("#missao-sem-item").addEventListener("change", renderMissoes);
 $("#missao-select").addEventListener("change", async e => render(await api("/api/config", { missao_id: e.target.value })));
 $("#missao-atualizar").onclick = async () => {
   const d = await api("/api/missoes/atualizar", {});

@@ -65,8 +65,18 @@ return [...document.querySelectorAll(".mblock")].flatMap(b => {
     exp: txt("missexp").trim(),
     requisito: txt("mobreq").trim(),
     maestria: pct || "",
+    // Imagem do item exigido (so aparece nas missoes que pedem item). O nome vem de mission_details
+    item_img: (b.querySelector("img[onclick^='buyRequiredItemPitch']") || {}).src || "",
   }];
 });
+"""
+
+# Detalhes da missao (mesma chamada do link do nome da missao), sem abrir popup
+DETALHE_MISSAO_JS = """
+let r = null;
+$.ajax({type: "POST", url: dy + "mission_details.php?mission=" + arguments[0] + "&" + ak, async: false, dataType: "json",
+        success: t => { r = t; }});
+return r;
 """
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -131,6 +141,30 @@ def ler_login():
     with open(ARQUIVO_LOGIN, "r", encoding="utf-8-sig") as arquivo:
         dados = [linha.strip() for linha in arquivo.read().splitlines()] + ["", ""]
     return dados[0], dados[1]
+
+
+def ler_missoes():
+    if not os.path.exists(ARQUIVO_MISSOES):
+        return {"atualizado": None, "missoes": [], "extras": {}}
+    with open(ARQUIVO_MISSOES, "r", encoding="utf-8") as arquivo:
+        dados = json.load(arquivo)
+    dados.setdefault("extras", {})
+    return dados
+
+
+def salvar_extra_missao(missao_id, **campos):
+    # Atualiza o que se sabe de uma missao no missoes.json. Valor None apaga o campo
+    dados = ler_missoes()
+    extra = dados["extras"].setdefault(str(missao_id), {})
+    for chave, valor in campos.items():
+        if valor is None:
+            extra.pop(chave, None)
+        else:
+            extra[chave] = valor
+    if not extra:
+        dados["extras"].pop(str(missao_id))
+    with open(ARQUIVO_MISSOES, "w", encoding="utf-8") as arquivo:
+        json.dump(dados, arquivo, ensure_ascii=False)
 
 
 def salvar_login(usuario, senha):
@@ -215,8 +249,8 @@ class MobsterBot:
         self.driver.execute_script("iFold = 0; arguments[0].click()", aba)
 
     def close_popups(self, silencioso=False):
-        # Avisos soltos do jogo (ex.: "healed" depois de curar) ficam por cima das abas
-        self.driver.execute_script("var h = document.getElementById('healed'); if (h) h.style.display = 'none';")
+        # A janela do hospital (healbox2) as vezes fica aberta por cima das abas
+        self.close_heal_box()
 
         # Fecha popups (fancybox) do jogo que ficam por cima da pagina e bloqueiam os cliques
         overlay = self.driver.find_elements(By.ID, "fancybox-overlay")
@@ -235,6 +269,17 @@ class MobsterBot:
             return not overlay or not overlay[0].is_displayed()
 
         WebDriverWait(self.driver, 10, poll_frequency=0.5).until(fechar)
+
+    def close_heal_box(self):
+        caixa = self.driver.find_elements(By.ID, "healbox2")
+        if not caixa or not caixa[0].is_displayed():
+            return
+        try:
+            self.driver.find_element(By.ID, "closeheal").click()
+            WebDriverWait(self.driver, 5).until(ec.invisibility_of_element_located((By.ID, "healbox2")))
+        except Exception:
+            # Se nem o X da janela for clicavel, esconde na marra para liberar as abas
+            self.driver.execute_script("arguments[0].style.display = 'none'", caixa[0])
 
     def hitlist_players(self):
         self.access_iframe()
@@ -291,7 +336,8 @@ class MobsterBot:
             if cliques >= self.config["max_cliques_cura"]:
                 log.info(Fore.RED + Style.BRIGHT + "Nao consegui curar, verifique se tem dinheiro para o hospital!" + Fore.RESET + Style.RESET_ALL)
                 break
-            self.driver.execute_script("iFold = 0; arguments[0].click()", healer_button)
+            # Clique nativo: o jogo ignora cliques via JS nos botoes dos popups (cura, repetir missao/ataque)
+            healer_button.click()
             cliques += 1
             time.sleep(0.5)
         self.stats["cliques_cura"] += cliques
@@ -299,9 +345,8 @@ class MobsterBot:
         close_button = WebDriverWait(self.driver, 15).until(
             ec.element_to_be_clickable((By.ID, "closeheal"))
         )
-        self.driver.execute_script("arguments[0].click()", close_button)
+        close_button.click()
         WebDriverWait(self.driver, 15).until(ec.invisibility_of_element_located((By.ID, "healbox2")))
-        self.close_popups(silencioso=True)
 
     # ------------------------------------------------------ players fortes
 
@@ -429,7 +474,7 @@ class MobsterBot:
 
                         if repetir_atack:
                             log.info(Fore.LIGHTCYAN_EX + Style.BRIGHT + f"Repetindo o atack em {self.PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
-                            self.driver.execute_script("iFold = 0; arguments[0].click()", repetir_atack[0])
+                            repetir_atack[0].click()
                             self.stats["repeticoes"] += 1
                             time.sleep(2)
                             self.heal_attack_again()
@@ -575,9 +620,20 @@ class MobsterBot:
     def read_missions(self):
         # Precisa estar dentro do iframe com a aba Missions aberta
         missoes = self.driver.execute_script(MISSOES_JS)
+        # "extras" guarda o que o bot aprendeu de cada missao (nome do item exigido, motivo da ultima falha)
+        extras = ler_missoes().get("extras", {})
         with open(ARQUIVO_MISSOES, "w", encoding="utf-8") as arquivo:
-            json.dump({"atualizado": datetime.now().isoformat(timespec="seconds"), "missoes": missoes}, arquivo, ensure_ascii=False)
+            json.dump({"atualizado": datetime.now().isoformat(timespec="seconds"), "missoes": missoes, "extras": extras},
+                      arquivo, ensure_ascii=False)
         return missoes
+
+    def mission_required_item(self, missao_id):
+        # Nome do item exigido pela missao ("" se nao exige). Precisa estar dentro do iframe
+        resposta = self.driver.execute_script(DETALHE_MISSAO_JS, int(missao_id)) or {}
+        requer = re.search(r"Requires:(.*?)</a>", resposta.get("message", ""), re.S)
+        nome = " ".join(re.sub(r"<[^>]+>", " ", requer.group(1)).split()) if requer else ""
+        salvar_extra_missao(missao_id, item=nome)
+        return nome
 
     def refresh_missions(self):
         self.access_iframe()
@@ -607,8 +663,10 @@ class MobsterBot:
                 return
 
             # O botao fica escondido na aba da cidade. O jogo trava cliques com "iFold" depois de um ataque, por isso zera antes
+            energia_antes = self.check_energy()
             self.driver.execute_script("iFold = 0; arguments[0].click()", botao)
-            self.stats["missoes"] += 1
+            feitas = 1
+            falhou = False
 
             for _ in range(self.config["missao_max_rodadas"]):
                 try:
@@ -620,6 +678,16 @@ class MobsterBot:
                     log.info(Fore.RED + f"Não consegui repetir a missão {missao}: {motivo or 'sem resposta do jogo'}" + Fore.RESET)
                     break
 
+                # O jogo mostra "Do Mission Again" mesmo quando a missao falha (ex.: falta item exigido)
+                resposta = " ".join(self.driver.find_element(By.ID, "popup").text.split())
+                if "Could not do the mission" in resposta:
+                    falta = re.search(r"need to have more (.+?)'s first", resposta)
+                    motivo = f"falta o item {falta.group(1)}" if falta else resposta[:200]
+                    log.info(Fore.RED + Style.BRIGHT + f"A missão {missao} falhou: {motivo}. Escolha outra missão no painel." + Fore.RESET + Style.RESET_ALL)
+                    salvar_extra_missao(missao, falha=motivo)
+                    falhou = True
+                    break
+
                 # Usa a maior quantidade de repeticoes que a energia paga, ate o limite configurado
                 energia = self.check_energy()
                 cabem = [r for r in REPETICOES_MISSAO if r <= self.config["missao_repeticoes"] and r * energia_minima <= energia]
@@ -627,11 +695,18 @@ class MobsterBot:
                     break
                 repeticoes = cabem[-1]
                 Select(self.driver.find_element(By.ID, "xm")).select_by_visible_text(f"{repeticoes:,}")
-                self.driver.execute_script("iFold = 0; arguments[0].click()", de_novo)
-                self.stats["missoes"] += repeticoes
+                de_novo.click()
+                feitas += repeticoes
                 WebDriverWait(self.driver, 15).until(ec.staleness_of(de_novo))
 
-            log.info(Fore.LIGHTMAGENTA_EX + f"Missões feitas, energia restante: {self.check_energy():,}" + Fore.RESET)
+            # So conta como feita se a energia baixou de verdade
+            energia_depois = self.check_energy()
+            if energia_depois < energia_antes:
+                self.stats["missoes"] += feitas
+                salvar_extra_missao(missao, falha=None)
+                log.info(Fore.LIGHTMAGENTA_EX + f"Missões feitas, energia restante: {energia_depois:,}" + Fore.RESET)
+            elif not falhou:
+                log.info(Fore.RED + f"A missão {missao} não gastou energia (restante: {energia_depois:,})." + Fore.RESET)
         finally:
             self.exit_iframe()
 
@@ -649,7 +724,7 @@ class MobsterBot:
 
             campo.clear()
             campo.send_keys(str(valor))
-            self.driver.execute_script("iFold = 0; arguments[0].click()", self.driver.find_element(By.XPATH, "//input[@id='amountdepo']/following-sibling::button"))
+            self.driver.find_element(By.XPATH, "//input[@id='amountdepo']/following-sibling::button").click()
             self.stats["depositos"] += 1
             log.info(Fore.LIGHTMAGENTA_EX + f"Depositado ${valor:,} no banco (o jogo cobra 10% de taxa)." + Fore.RESET)
             time.sleep(1)
