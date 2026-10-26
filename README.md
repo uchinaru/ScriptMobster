@@ -47,14 +47,16 @@ py -m venv .venv
 
 #### 2. Login
 
-Crie o arquivo `LOGIN.txt` na raiz do projeto com o usuário na primeira linha e a senha na segunda:
+O jeito mais fácil é pelo painel: no cartão **Conta**, preencha usuário e senha do jogo e clique em **Salvar login**. Para trocar só o usuário, deixe a senha em branco e a atual é mantida.
+
+O painel grava os dados no arquivo `LOGIN.txt` (usuário na primeira linha, senha na segunda). Quem usa só a linha de comando pode criar esse arquivo na mão:
 
 ```
 meu_usuario
 minha_senha
 ```
 
-> 🔒 `LOGIN.txt` está no `.gitignore` e nunca vai para o repositório.
+> 🔒 `LOGIN.txt` está no `.gitignore` e nunca vai para o repositório. O painel nunca mostra a senha salva, só avisa que ela existe.
 
 #### 3. Rodar
 
@@ -277,7 +279,7 @@ Bots costumam violar os termos de uso de jogos online e podem levar ao banimento
 
 ### 🇺🇸 English summary
 
-- **Setup:** macOS/Linux `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` · Windows `py -m venv .venv` then `.venv\Scripts\pip install -r requirements.txt`. Create `LOGIN.txt` (username on line 1, password on line 2).
+- **Setup:** macOS/Linux `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` · Windows `py -m venv .venv` then `.venv\Scripts\pip install -r requirements.txt`. Set username and password in the panel's **Conta** card (saved to `LOGIN.txt`, username on line 1, password on line 2).
 - **Panel:** `.venv/bin/python painel.py` (Windows: `.venv\Scripts\python painel.py`) opens `http://127.0.0.1:8765` to start/stop the bot, toggle each action live, pick missions by name and follow stats and the log.
 - **CLI:** `.venv/bin/python scriptMobster.py [--headless] [--ciclos N] [--alvo ID] [--config FILE]`.
 - **Features:** hitlist attacks (highest bounty first, level-capped, skips MEGA and players who beat you), attacking any player by profile ID, missions with spare energy, free daily bonus collection, auto-heal, optional bank deposits (10% fee), popup handling, auto re-login, session stats and `bot.log`.

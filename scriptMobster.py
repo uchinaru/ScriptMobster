@@ -42,6 +42,7 @@ CONFIG_PADRAO = {
 
 ARQUIVO_FORTES = "LIST_PLAYERS_STRONGS.txt"
 ARQUIVO_MISSOES = "missoes.json"
+ARQUIVO_LOGIN = "LOGIN.txt"
 REPETICOES_MISSAO = [1, 10, 25, 50, 100, 250, 500, 1000, 10000]  # Opcoes do "Do Mission Again"
 
 # Le todas as missoes da aba Missions, inclusive as das cidades escondidas
@@ -122,6 +123,21 @@ def resumo_erro(e):
     return f"{type(e).__name__}: {(str(e).strip().splitlines() or [''])[0]}"
 
 
+def ler_login():
+    # Usuario na 1a linha, senha na 2a. Sem arquivo (ou incompleto) devolve strings vazias
+    # utf-8-sig ignora o BOM que o Bloco de Notas do Windows pode gravar no inicio do arquivo
+    if not os.path.exists(ARQUIVO_LOGIN):
+        return "", ""
+    with open(ARQUIVO_LOGIN, "r", encoding="utf-8-sig") as arquivo:
+        dados = [linha.strip() for linha in arquivo.read().splitlines()] + ["", ""]
+    return dados[0], dados[1]
+
+
+def salvar_login(usuario, senha):
+    with open(ARQUIVO_LOGIN, "w", encoding="utf-8") as arquivo:
+        arquivo.write(f"{usuario}\n{senha}\n")
+
+
 class MobsterBot:
 
     def __init__(self, config):
@@ -168,12 +184,9 @@ class MobsterBot:
         log.info(Fore.GREEN + "Login feito." + Fore.RESET)
 
     def load_login_password(self):
-        # utf-8-sig ignora o BOM que o Bloco de Notas do Windows pode gravar no inicio do arquivo
-        with open("LOGIN.txt", "r", encoding="utf-8-sig") as login:
-            dados = login.read().splitlines()
-
-            self.USER_LOGIN = dados[0].strip()
-            self.USER_PASSWORD = dados[1].strip()
+        self.USER_LOGIN, self.USER_PASSWORD = ler_login()
+        if not self.USER_LOGIN or not self.USER_PASSWORD:
+            raise RuntimeError("Login não configurado: preencha usuário e senha no painel (ou no LOGIN.txt).")
 
     def ensure_session(self):
         # Se a sessao expirou e o jogo voltou para a tela de login, loga de novo
