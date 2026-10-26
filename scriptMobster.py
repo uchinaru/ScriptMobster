@@ -197,9 +197,14 @@ class MobsterBot:
     def open_tab(self, tab_id):
         # Abas do jogo: I2 Missions, I3 Bank, I7 Hitlist, I9 Hospital...
         self.close_popups()
-        WebDriverWait(self.driver, 15).until(ec.element_to_be_clickable((By.ID, tab_id))).click()
+        aba = WebDriverWait(self.driver, 15).until(ec.presence_of_element_located((By.ID, tab_id)))
+        # Clique via JS: avisos do jogo por cima da aba (ex.: "healed") nao bloqueiam
+        self.driver.execute_script("iFold = 0; arguments[0].click()", aba)
 
     def close_popups(self, silencioso=False):
+        # Avisos soltos do jogo (ex.: "healed" depois de curar) ficam por cima das abas
+        self.driver.execute_script("var h = document.getElementById('healed'); if (h) h.style.display = 'none';")
+
         # Fecha popups (fancybox) do jogo que ficam por cima da pagina e bloqueiam os cliques
         overlay = self.driver.find_elements(By.ID, "fancybox-overlay")
         if not overlay or not overlay[0].is_displayed():
@@ -273,7 +278,7 @@ class MobsterBot:
             if cliques >= self.config["max_cliques_cura"]:
                 log.info(Fore.RED + Style.BRIGHT + "Nao consegui curar, verifique se tem dinheiro para o hospital!" + Fore.RESET + Style.RESET_ALL)
                 break
-            healer_button.click()
+            self.driver.execute_script("iFold = 0; arguments[0].click()", healer_button)
             cliques += 1
             time.sleep(0.5)
         self.stats["cliques_cura"] += cliques
@@ -281,8 +286,9 @@ class MobsterBot:
         close_button = WebDriverWait(self.driver, 15).until(
             ec.element_to_be_clickable((By.ID, "closeheal"))
         )
-        close_button.click()
+        self.driver.execute_script("arguments[0].click()", close_button)
         WebDriverWait(self.driver, 15).until(ec.invisibility_of_element_located((By.ID, "healbox2")))
+        self.close_popups(silencioso=True)
 
     # ------------------------------------------------------ players fortes
 
@@ -410,7 +416,7 @@ class MobsterBot:
 
                         if repetir_atack:
                             log.info(Fore.LIGHTCYAN_EX + Style.BRIGHT + f"Repetindo o atack em {self.PLAYER_ALVO}" + Fore.RESET + Style.RESET_ALL)
-                            repetir_atack[0].click()
+                            self.driver.execute_script("iFold = 0; arguments[0].click()", repetir_atack[0])
                             self.stats["repeticoes"] += 1
                             time.sleep(2)
                             self.heal_attack_again()
@@ -608,7 +614,7 @@ class MobsterBot:
                     break
                 repeticoes = cabem[-1]
                 Select(self.driver.find_element(By.ID, "xm")).select_by_visible_text(f"{repeticoes:,}")
-                de_novo.click()
+                self.driver.execute_script("iFold = 0; arguments[0].click()", de_novo)
                 self.stats["missoes"] += repeticoes
                 WebDriverWait(self.driver, 15).until(ec.staleness_of(de_novo))
 
@@ -630,7 +636,7 @@ class MobsterBot:
 
             campo.clear()
             campo.send_keys(str(valor))
-            self.driver.find_element(By.XPATH, "//input[@id='amountdepo']/following-sibling::button").click()
+            self.driver.execute_script("iFold = 0; arguments[0].click()", self.driver.find_element(By.XPATH, "//input[@id='amountdepo']/following-sibling::button"))
             self.stats["depositos"] += 1
             log.info(Fore.LIGHTMAGENTA_EX + f"Depositado ${valor:,} no banco (o jogo cobra 10% de taxa)." + Fore.RESET)
             time.sleep(1)
