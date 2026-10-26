@@ -11,7 +11,7 @@ import os
 import threading
 import webbrowser
 
-from scriptMobster import ANSI, ARQUIVO_MISSOES, CONFIG_PADRAO, carregar_config, log, resumo_erro, run_bot
+from scriptMobster import ANSI, ARQUIVO_MISSOES, CONFIG_PADRAO, carregar_config, ler_login, log, resumo_erro, run_bot, salvar_login
 
 PORTA = 8765
 ARQUIVO_CONFIG = "config.json"
@@ -46,6 +46,9 @@ class Controle:
     def iniciar(self):
         if self.rodando:
             return
+        if not all(ler_login()):
+            log.info("Preencha usuário e senha em Conta antes de iniciar o bot.")
+            return
         self.parar.clear()
         self.thread = threading.Thread(target=self._rodar, daemon=True)
         self.thread.start()
@@ -78,6 +81,15 @@ class Controle:
             json.dump(self.config, arquivo, indent=2, ensure_ascii=False)
         log.info("Configuração atualizada pelo painel.")
 
+    def atualizar_login(self, dados):
+        # Senha em branco mantem a que ja esta salva
+        usuario = str(dados.get("usuario") or "").strip()
+        senha = str(dados.get("senha") or "").strip() or ler_login()[1]
+        if not usuario or not senha:
+            raise ValueError("Informe usuário e senha.")
+        salvar_login(usuario, senha)
+        log.info(f"Login salvo para {usuario}." + (" Vale no próximo início do bot." if self.rodando else ""))
+
     def missoes(self):
         # Ultima lista lida pelo bot (fica salva para o painel funcionar com o bot parado)
         if not os.path.exists(ARQUIVO_MISSOES):
@@ -106,8 +118,11 @@ class Controle:
 
     def estado(self):
         bot = self.bot
+        usuario, senha = ler_login()
         return {
             "rodando": self.rodando,
+            # A senha nunca sai do servidor, so se existe uma salva
+            "login": {"usuario": usuario, "tem_senha": bool(senha)},
             "parando": self.rodando and self.parar.is_set(),
             "config": self.config,
             "stats": bot.stats if bot else {},
@@ -144,6 +159,10 @@ class Handler(BaseHTTPRequestHandler):
             self._responder("{}", status=404)
 
     def do_POST(self):
+        # So aceita pedidos vindos do proprio painel (outro site aberto no navegador nao consegue mexer no bot)
+        origem = self.headers.get("Origin")
+        if origem and origem not in (f"http://127.0.0.1:{PORTA}", f"http://localhost:{PORTA}"):
+            return self._responder("{}", status=403)
         tamanho = int(self.headers.get("Content-Length") or 0)
         corpo = json.loads(self.rfile.read(tamanho) or b"{}")
         try:
@@ -153,6 +172,8 @@ class Handler(BaseHTTPRequestHandler):
                 controle.parar_bot()
             elif self.path == "/api/config":
                 controle.atualizar_config(corpo)
+            elif self.path == "/api/login":
+                controle.atualizar_login(corpo)
             elif self.path == "/api/missoes/atualizar":
                 controle.atualizar_missoes()
                 return self._responder(json.dumps(controle.missoes(), ensure_ascii=False))
@@ -213,6 +234,10 @@ PAGINA = r"""<!doctype html>
   .linha { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   button.leve { background:transparent; color:var(--txt); border:1px solid var(--borda); padding:4px 10px; font-weight:500; }
   #missao-info { font-size:12px; color:var(--sub); }
+  .conta { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+  .conta label { font-size:12px; color:var(--sub); display:flex; flex-direction:column; gap:2px; flex:1; min-width:160px; }
+  .conta input { padding:6px 8px; border:1px solid var(--borda); border-radius:6px; background:var(--bg); color:var(--txt); }
+  #login-msg { font-size:12px; color:var(--sub); width:100%; }
 </style>
 </head>
 <body>
@@ -223,6 +248,16 @@ PAGINA = r"""<!doctype html>
     <button id="iniciar">Iniciar</button>
     <button id="parar" class="parar">Parar</button>
   </header>
+
+  <section class="card">
+    <h2>Conta</h2>
+    <form class="conta" id="login-form" autocomplete="on">
+      <label>Usuário<input id="login-usuario" name="username" autocomplete="username" required></label>
+      <label>Senha<input id="login-senha" name="password" type="password" autocomplete="current-password"></label>
+      <button type="submit">Salvar login</button>
+      <div id="login-msg"></div>
+    </form>
+  </section>
 
   <section class="card">
     <h2>Personagem</h2>
@@ -341,6 +376,12 @@ function render(e) {
   $("#parar").disabled = !e.rodando || e.parando;
   $("#inicio").textContent = e.inicio ? "desde " + e.inicio : "";
 
+  const usuario = $("#login-usuario");
+  if (document.activeElement !== usuario && !usuario.value) usuario.value = e.login.usuario;
+  $("#login-senha").placeholder = e.login.tem_senha ? "•••••• (salva, deixe em branco para manter)" : "digite a senha";
+  if (!$("#login-msg").dataset.fixo)
+    $("#login-msg").textContent = e.login.usuario && e.login.tem_senha ? "Login configurado. Fica salvo só neste computador (LOGIN.txt)." : "Preencha usuário e senha do jogo para iniciar o bot.";
+
   for (const [k, v] of Object.entries(e.status)) { const el = $("#s-" + k); if (el) el.textContent = fmt(v); }
   for (const [k, v] of Object.entries(e.stats)) { const el = $("#t-" + k); if (el) el.textContent = fmt(v); }
   const total = (e.stats.vitorias || 0) + (e.stats.derrotas || 0);
@@ -429,6 +470,16 @@ $("#missao-atualizar").onclick = async () => {
   if (!d.atualizando) { alert("O bot precisa estar rodando para ler as missões do jogo."); return; }
   $("#missao-atualizar").textContent = "Atualizando...";
   const espera = setInterval(async () => { if (!(await carregarMissoes()).atualizando) clearInterval(espera); }, 2000);
+};
+
+$("#login-form").onsubmit = async ev => {
+  ev.preventDefault();
+  const msg = $("#login-msg");
+  const d = await api("/api/login", { usuario: $("#login-usuario").value, senha: $("#login-senha").value });
+  msg.dataset.fixo = "1";
+  if (d.erro) { msg.textContent = d.erro; msg.className = "aviso"; }
+  else { msg.textContent = "Login salvo."; msg.className = ""; $("#login-senha").value = ""; render(d); }
+  setTimeout(() => { delete msg.dataset.fixo; msg.className = ""; }, 4000);
 };
 
 $("#iniciar").onclick = async () => render(await api("/api/iniciar", {}));
