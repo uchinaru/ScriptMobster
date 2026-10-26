@@ -65,8 +65,18 @@ return [...document.querySelectorAll(".mblock")].flatMap(b => {
     exp: txt("missexp").trim(),
     requisito: txt("mobreq").trim(),
     maestria: pct || "",
+    // Imagem do item exigido (so aparece nas missoes que pedem item). O nome vem de mission_details
+    item_img: (b.querySelector("img[onclick^='buyRequiredItemPitch']") || {}).src || "",
   }];
 });
+"""
+
+# Detalhes da missao (mesma chamada do link do nome da missao), sem abrir popup
+DETALHE_MISSAO_JS = """
+let r = null;
+$.ajax({type: "POST", url: dy + "mission_details.php?mission=" + arguments[0] + "&" + ak, async: false, dataType: "json",
+        success: t => { r = t; }});
+return r;
 """
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -131,6 +141,30 @@ def ler_login():
     with open(ARQUIVO_LOGIN, "r", encoding="utf-8-sig") as arquivo:
         dados = [linha.strip() for linha in arquivo.read().splitlines()] + ["", ""]
     return dados[0], dados[1]
+
+
+def ler_missoes():
+    if not os.path.exists(ARQUIVO_MISSOES):
+        return {"atualizado": None, "missoes": [], "extras": {}}
+    with open(ARQUIVO_MISSOES, "r", encoding="utf-8") as arquivo:
+        dados = json.load(arquivo)
+    dados.setdefault("extras", {})
+    return dados
+
+
+def salvar_extra_missao(missao_id, **campos):
+    # Atualiza o que se sabe de uma missao no missoes.json. Valor None apaga o campo
+    dados = ler_missoes()
+    extra = dados["extras"].setdefault(str(missao_id), {})
+    for chave, valor in campos.items():
+        if valor is None:
+            extra.pop(chave, None)
+        else:
+            extra[chave] = valor
+    if not extra:
+        dados["extras"].pop(str(missao_id))
+    with open(ARQUIVO_MISSOES, "w", encoding="utf-8") as arquivo:
+        json.dump(dados, arquivo, ensure_ascii=False)
 
 
 def salvar_login(usuario, senha):
@@ -586,9 +620,20 @@ class MobsterBot:
     def read_missions(self):
         # Precisa estar dentro do iframe com a aba Missions aberta
         missoes = self.driver.execute_script(MISSOES_JS)
+        # "extras" guarda o que o bot aprendeu de cada missao (nome do item exigido, motivo da ultima falha)
+        extras = ler_missoes().get("extras", {})
         with open(ARQUIVO_MISSOES, "w", encoding="utf-8") as arquivo:
-            json.dump({"atualizado": datetime.now().isoformat(timespec="seconds"), "missoes": missoes}, arquivo, ensure_ascii=False)
+            json.dump({"atualizado": datetime.now().isoformat(timespec="seconds"), "missoes": missoes, "extras": extras},
+                      arquivo, ensure_ascii=False)
         return missoes
+
+    def mission_required_item(self, missao_id):
+        # Nome do item exigido pela missao ("" se nao exige). Precisa estar dentro do iframe
+        resposta = self.driver.execute_script(DETALHE_MISSAO_JS, int(missao_id)) or {}
+        requer = re.search(r"Requires:(.*?)</a>", resposta.get("message", ""), re.S)
+        nome = " ".join(re.sub(r"<[^>]+>", " ", requer.group(1)).split()) if requer else ""
+        salvar_extra_missao(missao_id, item=nome)
+        return nome
 
     def refresh_missions(self):
         self.access_iframe()
@@ -639,6 +684,7 @@ class MobsterBot:
                     falta = re.search(r"need to have more (.+?)'s first", resposta)
                     motivo = f"falta o item {falta.group(1)}" if falta else resposta[:200]
                     log.info(Fore.RED + Style.BRIGHT + f"A missão {missao} falhou: {motivo}. Escolha outra missão no painel." + Fore.RESET + Style.RESET_ALL)
+                    salvar_extra_missao(missao, falha=motivo)
                     falhou = True
                     break
 
@@ -657,6 +703,7 @@ class MobsterBot:
             energia_depois = self.check_energy()
             if energia_depois < energia_antes:
                 self.stats["missoes"] += feitas
+                salvar_extra_missao(missao, falha=None)
                 log.info(Fore.LIGHTMAGENTA_EX + f"Missões feitas, energia restante: {energia_depois:,}" + Fore.RESET)
             elif not falhou:
                 log.info(Fore.RED + f"A missão {missao} não gastou energia (restante: {energia_depois:,})." + Fore.RESET)
