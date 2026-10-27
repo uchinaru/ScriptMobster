@@ -88,7 +88,7 @@ Abre `http://127.0.0.1:8765` no navegador (só acessível na sua máquina). Fech
 | Seção | O que tem |
 |---|---|
 | **Cabeçalho** | Nome do personagem, estado do bot (Parado / Rodando / Parando) e botões **Iniciar** e **Parar**. |
-| **Personagem** | Nível, mob, vida, stamina, tempo até o próximo ponto de stamina e energia, atualizados a cada ciclo. |
+| **Personagem** | Nível, mob, vida, stamina e energia, atualizados a cada ciclo. Abaixo, as estatísticas do perfil (Bounty, Missions, Fights Won/Lost, Deaths, Kills, Bounties), lidas ao iniciar e a cada 10 minutos. |
 | **Ações** | Liga/desliga e parâmetros de cada ação: hitlist, alvo específico, missões, bônus grátis, banco e Chrome sem janela. |
 | **Missões** | Lista de todas as missões do jogo com busca por nome, ordenada pelo dinheiro médio por ponto de energia, mostrando cidade, energia, dinheiro e maestria. Missões bloqueadas pelo seu nível/mob ficam escondidas (marque "mostrar bloqueadas" para ver, com 🔒). A maioria das missões exige um item (marcadas com 🧰): ao selecionar uma, o painel mostra a imagem e o nome do item, e ❌ indica que a última tentativa falhou por falta dele. Marque "só sem item" para ver só as que não pedem item. O botão **Atualizar lista** relê as missões no jogo com o bot rodando. |
 | **Sessão** | Vitórias, derrotas, taxa de acerto, ataques repetidos, curas, missões, depósitos e bônus coletados desde o início. |
@@ -266,6 +266,9 @@ Exemplo de `config.json`:
 | "Atualizar lista" pede para o bot estar rodando | A leitura usa a sessão do bot no jogo. Inicie o bot primeiro. |
 | "Nao consegui curar, verifique se tem dinheiro para o hospital!" | Falta dinheiro em mãos. Diminua `reserva_dinheiro` ou desligue o banco. |
 | "O alvo … está morto / no hospital" | Normal: o bot tenta de novo no próximo ciclo. |
+| "A missão X falhou: falta o item …" | A missão exige um item que você não tem. Escolha outra no painel (filtro "só sem item"). |
+| "Missões pausadas até HH:MM" | A missão falhou 3 vezes seguidas. O bot pausa as missões por 10 minutos e continua atacando. |
+| "O navegador fechou. Abrindo outro…" | O Chrome fechou ou travou (Mac dormiu, janela fechada). O bot reabre e faz login sozinho. |
 | Porta 8765 em uso | Já existe um painel aberto. Feche-o ou mude `PORTA` em `painel.py`. |
 | Aviso `NotOpenSSLWarning` | Python antigo do macOS. Use o Python 3.12 (`brew install python@3.12`). |
 

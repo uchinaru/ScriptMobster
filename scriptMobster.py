@@ -2,12 +2,14 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as ec
-from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
+from selenium.common.exceptions import (InvalidSessionIdException, NoSuchWindowException, StaleElementReferenceException,
+                                        TimeoutException, WebDriverException)
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
+from urllib3.exceptions import MaxRetryError, ProtocolError
 from colorama import init, Fore, Style
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import argparse
 import json
 import logging
@@ -129,6 +131,16 @@ def segundos(texto):
     return numero(minutos) * 60 + numero(segs)
 
 
+def navegador_morto(e):
+    # Erros que indicam que o Chrome fechou ou perdeu a conexao com o chromedriver
+    if isinstance(e, (InvalidSessionIdException, NoSuchWindowException, MaxRetryError, ProtocolError, ConnectionError)):
+        return True
+    texto = str(e).lower()
+    return isinstance(e, WebDriverException) and any(
+        t in texto for t in ("invalid session id", "disconnected", "chrome not reachable", "target window already closed",
+                             "no such window", "session deleted", "connection refused"))
+
+
 def resumo_erro(e):
     return f"{type(e).__name__}: {(str(e).strip().splitlines() or [''])[0]}"
 
@@ -185,16 +197,34 @@ class MobsterBot:
         self.inicio = datetime.now()
         self.status = {}
         self.ultimo_bonus = None
+        self.ultimo_perfil = None
+        self.missao_falhas = 0          # Falhas seguidas da missao escolhida
+        self.missao_pausa_ate = None    # Depois de varias falhas, as missoes ficam pausadas ate esse horario
         self.trava = threading.Lock()  # Evita que o painel e o loop usem o navegador ao mesmo tempo
+        self.abrir_navegador()
 
+    def abrir_navegador(self):
         chrome_options = Options()
-        if config["headless"]:
+        if self.config["headless"]:
             chrome_options.add_argument("--headless=new")  # Roda o navegador sem opção grafica
             chrome_options.add_argument("--window-size=1400,1000")
 
         # O Selenium 4 ja baixa o chromedriver certo sozinho (Selenium Manager)
         self.driver = webdriver.Chrome(options=chrome_options)
         self.driver.get(self.SITE_LINK)
+
+    def fechar_navegador(self):
+        try:
+            self.driver.quit()
+        except Exception:
+            pass  # O navegador pode ja ter morrido
+
+    def reiniciar_navegador(self):
+        # O Chrome fechou ou travou (Mac dormiu, janela fechada, crash): abre outro e loga de novo
+        log.info(Fore.YELLOW + Style.BRIGHT + "O navegador fechou. Abrindo outro e fazendo login de novo..." + Fore.RESET + Style.RESET_ALL)
+        self.fechar_navegador()
+        self.abrir_navegador()
+        self.login()
 
     # ------------------------------------------------------------------ login
 
@@ -588,6 +618,31 @@ class MobsterBot:
 
     # --------------------------------------------------- energia e dinheiro
 
+    def update_profile(self, forcar=False):
+        # Estatisticas do perfil (aba My Mobster): le ao iniciar e depois a cada 10 minutos
+        if not forcar and self.ultimo_perfil and datetime.now() - self.ultimo_perfil < timedelta(minutes=10):
+            return
+        self.access_iframe()
+        try:
+            self.open_tab("I12")
+            WebDriverWait(self.driver, 15).until(
+                lambda d: "Kills:" in (d.execute_script("return document.getElementById('content').innerText") or ""))
+            texto = self.driver.execute_script("return document.getElementById('content').innerText")
+            # Tabela "Stat / Value": Level, Bounty, Missions, Fights Won, Fights Lost, Deaths, Kills, Bounties
+            tabela = texto.split("Value", 1)[-1].split("Convene", 1)[0]
+            perfil = re.findall(r"([A-Za-z][A-Za-z ]*):\s+(\S+)", tabela)
+            # Level ja aparece no painel como Nivel
+            self.status["perfil"] = [[rotulo.strip(), valor] for rotulo, valor in perfil if rotulo.strip() != "Level"]
+            valores = dict(perfil)
+            self.status["kills"] = numero(valores.get("Kills", "0"))
+            self.status["mortes"] = numero(valores.get("Deaths", "0"))
+        except TimeoutException:
+            # Perfil e so informativo: se o jogo demorar, tenta de novo no proximo intervalo sem derrubar o ciclo
+            log.info(Fore.YELLOW + "O perfil demorou para carregar, tento de novo mais tarde." + Fore.RESET)
+        finally:
+            self.ultimo_perfil = datetime.now()
+            self.exit_iframe()
+
     def collect_bonuses(self):
         # Botoes gratis da aba Main. O jogo responde num popup "Successo!" ou "Insuccesso!" com o motivo
         if not self.config["coletar_bonus"]:
@@ -650,6 +705,8 @@ class MobsterBot:
         missao = self.config["missao_id"]
         if not self.config["fazer_missoes"] or not missao:
             return
+        if self.missao_pausa_ate and datetime.now() < self.missao_pausa_ate:
+            return
 
         self.access_iframe()
         try:
@@ -673,9 +730,15 @@ class MobsterBot:
                     de_novo = WebDriverWait(self.driver, 15).until(ec.presence_of_element_located(
                         (By.XPATH, "//div[@id='popup']//a[contains(., 'Do Mission Again')]")))
                 except TimeoutException:
-                    # Sem "Do Mission Again": a missao falhou (ex.: falta item ou nivel). Mostra o motivo do jogo
+                    # Sem "Do Mission Again": a missao falhou (ex.: falta item ou nivel). Mostra o motivo do jogo,
+                    # que pode vir no popup da missao ou numa janela do fancybox
                     motivo = " ".join(self.driver.find_element(By.ID, "popup").text.split())[:200]
+                    janela = self.driver.find_elements(By.ID, "fancybox-content")
+                    if not motivo and janela and janela[0].is_displayed():
+                        motivo = " ".join(janela[0].text.split())[:200]
                     log.info(Fore.RED + f"Não consegui repetir a missão {missao}: {motivo or 'sem resposta do jogo'}" + Fore.RESET)
+                    self.close_popups(silencioso=True)
+                    falhou = True
                     break
 
                 # O jogo mostra "Do Mission Again" mesmo quando a missao falha (ex.: falta item exigido)
@@ -703,10 +766,19 @@ class MobsterBot:
             energia_depois = self.check_energy()
             if energia_depois < energia_antes:
                 self.stats["missoes"] += feitas
+                self.missao_falhas = 0
                 salvar_extra_missao(missao, falha=None)
                 log.info(Fore.LIGHTMAGENTA_EX + f"Missões feitas, energia restante: {energia_depois:,}" + Fore.RESET)
-            elif not falhou:
-                log.info(Fore.RED + f"A missão {missao} não gastou energia (restante: {energia_depois:,})." + Fore.RESET)
+            else:
+                if not falhou:
+                    log.info(Fore.RED + f"A missão {missao} não gastou energia (restante: {energia_depois:,})." + Fore.RESET)
+                # Nao insiste toda hora numa missao que nao esta rodando: pausa e tenta de novo mais tarde
+                self.missao_falhas += 1
+                if self.missao_falhas >= 3:
+                    self.missao_falhas = 0
+                    self.missao_pausa_ate = datetime.now() + timedelta(minutes=10)
+                    log.info(Fore.YELLOW + f"A missão {missao} falhou 3 vezes seguidas. Missões pausadas até "
+                             + f"{self.missao_pausa_ate:%H:%M}; os ataques continuam." + Fore.RESET)
         finally:
             self.exit_iframe()
 
@@ -737,7 +809,8 @@ class MobsterBot:
         # Foto dos atributos do personagem, usada pelo painel
         self.access_iframe()
         try:
-            self.status = {
+            # update: mantem kills/mortes lidos do perfil
+            self.status.update({
                 "nome": self.read_stat("mystats_name").strip(),
                 "vida": numero(self.read_stat("healthStater")),
                 "stamina": self.check_stamina(),
@@ -745,7 +818,7 @@ class MobsterBot:
                 "nivel": self.my_level(),
                 "mob": numero(self.read_stat("hgsstat")),
                 "proxima_stamina": self.read_stat("stamina_timer"),
-            }
+            })
         finally:
             self.exit_iframe()
         return self.status
@@ -781,9 +854,10 @@ def run_bot(config, parar=None, ao_iniciar=None):
         scriptMobster.login()
         try:
             # Ao iniciar, le os dados do personagem e a lista de missoes
+            scriptMobster.update_profile(forcar=True)
             st = scriptMobster.update_status()
             log.info(Fore.GREEN + Style.BRIGHT + f"Personagem: {st['nome']} | Nível {st['nivel']} | Mob {st['mob']} | "
-                     + f"Vida {st['vida']} | Stamina {st['stamina']} | Energia {st['energia']:,}" + Fore.RESET + Style.RESET_ALL)
+                     + f"Vida {st['vida']} | Stamina {st['stamina']} | Energia {st['energia']:,} | Kills {st.get('kills', 0):,} | Mortes {st.get('mortes', 0):,}" + Fore.RESET + Style.RESET_ALL)
             scriptMobster.refresh_missions()
             scriptMobster.collect_bonuses()
         except Exception as e:
@@ -797,6 +871,7 @@ def run_bot(config, parar=None, ao_iniciar=None):
             try:
                 scriptMobster.ensure_session()
                 scriptMobster.collect_bonuses()
+                scriptMobster.update_profile()
                 scriptMobster.heal()
                 stamina = scriptMobster.update_status()["stamina"]
 
@@ -815,10 +890,21 @@ def run_bot(config, parar=None, ao_iniciar=None):
                 # Um erro pontual nao derruba o bot, so para depois de varios erros seguidos
                 erros_seguidos += 1
                 log.info(Fore.RED + f"Erro no ciclo ({erros_seguidos}/5): {resumo_erro(e)}" + Fore.RESET)
-                scriptMobster.exit_iframe()
                 if erros_seguidos >= 5:
                     raise
-                parar.wait(5)
+                if navegador_morto(e):
+                    try:
+                        scriptMobster.reiniciar_navegador()
+                    except Exception as erro_reabrir:
+                        # Ex.: sem internet logo depois do Mac acordar. Tenta de novo no proximo ciclo
+                        log.info(Fore.RED + f"Não consegui reabrir o navegador: {resumo_erro(erro_reabrir)}" + Fore.RESET)
+                        parar.wait(60)
+                else:
+                    try:
+                        scriptMobster.exit_iframe()
+                    except Exception:
+                        pass
+                    parar.wait(5)
                 continue
             finally:
                 scriptMobster.trava.release()
@@ -842,7 +928,7 @@ def run_bot(config, parar=None, ao_iniciar=None):
         log.info(Fore.YELLOW + "Bot interrompido pelo usuário." + Fore.RESET)
     finally:
         scriptMobster.print_stats()
-        scriptMobster.driver.quit()
+        scriptMobster.fechar_navegador()
         log.info(Fore.YELLOW + "Bot parado." + Fore.RESET)
 
 
