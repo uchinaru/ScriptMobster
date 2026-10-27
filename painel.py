@@ -245,6 +245,12 @@ PAGINA = r"""<!doctype html>
   .stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap:10px; }
   .stat b { display:block; font-size:22px; font-variant-numeric:tabular-nums; }
   .stat span { color:var(--sub); font-size:12px; }
+  .compacto { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap:8px; }
+  .compacto .stat b { font-size:16px; }
+  .compacto .stat span, .perfil .stat span { font-size:11px; }
+  .perfil { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--borda); }
+  .perfil:empty { display:none; }
+  .perfil .stat b { font-size:13px; font-weight:600; }
   .acao { display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-top:1px solid var(--borda); }
   .acao:first-of-type { border-top:0; padding-top:0; }
   .acao .info { flex:1; }
@@ -301,15 +307,14 @@ PAGINA = r"""<!doctype html>
 
   <section class="card">
     <h2>Personagem</h2>
-    <div class="stats">
+    <div class="stats compacto">
       <div class="stat"><b id="s-nivel">-</b><span>Nível</span></div>
       <div class="stat"><b id="s-mob">-</b><span>Mob</span></div>
       <div class="stat"><b id="s-vida">-</b><span>Vida</span></div>
       <div class="stat"><b id="s-stamina">-</b><span>Stamina</span></div>
       <div class="stat"><b id="s-energia">-</b><span>Energia</span></div>
-      <div class="stat"><b id="s-kills">-</b><span>Kills</span></div>
-      <div class="stat"><b id="s-mortes">-</b><span>Deaths</span></div>
     </div>
+    <div class="stats perfil" id="perfil"></div>
   </section>
 
   <div class="grade">
@@ -430,6 +435,7 @@ function render(e) {
     $("#login-msg").textContent = e.login.usuario && e.login.tem_senha ? "Login configurado. Fica salvo só neste computador (LOGIN.txt)." : "Preencha usuário e senha do jogo para iniciar o bot.";
 
   for (const [k, v] of Object.entries(e.status)) { const el = $("#s-" + k); if (el) el.textContent = fmt(v); }
+  renderPerfil(e.status.perfil || []);
   for (const [k, v] of Object.entries(e.stats)) { const el = $("#t-" + k); if (el) el.textContent = fmt(v); }
   const total = (e.stats.vitorias || 0) + (e.stats.derrotas || 0);
   $("#t-taxa").textContent = total ? Math.round(100 * e.stats.vitorias / total) + "%" : "-";
@@ -458,6 +464,23 @@ document.querySelectorAll("[data-cfg]").forEach(el => {
     render(await api("/api/config", { [el.dataset.cfg]: v }));
   });
 });
+// ---------- perfil (estatisticas da aba My Mobster)
+let perfilAtual = "";
+function renderPerfil(perfil) {
+  const chave = JSON.stringify(perfil);
+  if (chave === perfilAtual) return;
+  perfilAtual = chave;
+  const box = $("#perfil");
+  box.innerHTML = "";
+  for (const [rotulo, valor] of perfil) {
+    const d = document.createElement("div"); d.className = "stat";
+    // Dinheiro grande fica abreviado ($311B); o valor completo aparece ao passar o mouse
+    const dinheiro = valor.startsWith("$") ? Number(valor.replace(/[$,]/g, "")) : NaN;
+    const b = document.createElement("b"); b.textContent = dinheiro >= 1e6 ? "$" + curto(dinheiro) : valor; b.title = valor;
+    const sp = document.createElement("span"); sp.textContent = rotulo;
+    d.append(b, sp); box.appendChild(d);
+  }
+}
 // ---------- missoes
 let extras = {}, buscandoItem = null, rodando = false, versaoMissoes;
 let missoes = [], nivelAtual = 0, mobAtual = 0, missaoAtual = null, ultimaAtualizacao = null;

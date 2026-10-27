@@ -590,7 +590,7 @@ class MobsterBot:
     # --------------------------------------------------- energia e dinheiro
 
     def update_profile(self, forcar=False):
-        # Kills e mortes so aparecem na aba My Mobster: le ao iniciar e depois a cada 10 minutos
+        # Estatisticas do perfil (aba My Mobster): le ao iniciar e depois a cada 10 minutos
         if not forcar and self.ultimo_perfil and datetime.now() - self.ultimo_perfil < timedelta(minutes=10):
             return
         self.access_iframe()
@@ -599,10 +599,14 @@ class MobsterBot:
             WebDriverWait(self.driver, 15).until(
                 lambda d: "Kills:" in (d.execute_script("return document.getElementById('content').innerText") or ""))
             texto = self.driver.execute_script("return document.getElementById('content').innerText")
-            for chave, rotulo in (("kills", "Kills"), ("mortes", "Deaths")):
-                valor = re.search(rf"{rotulo}:\s*([\d,]+)", texto)
-                if valor:
-                    self.status[chave] = numero(valor.group(1))
+            # Tabela "Stat / Value": Level, Bounty, Missions, Fights Won, Fights Lost, Deaths, Kills, Bounties
+            tabela = texto.split("Value", 1)[-1].split("Convene", 1)[0]
+            perfil = re.findall(r"([A-Za-z][A-Za-z ]*):\s+(\S+)", tabela)
+            # Level ja aparece no painel como Nivel
+            self.status["perfil"] = [[rotulo.strip(), valor] for rotulo, valor in perfil if rotulo.strip() != "Level"]
+            valores = dict(perfil)
+            self.status["kills"] = numero(valores.get("Kills", "0"))
+            self.status["mortes"] = numero(valores.get("Deaths", "0"))
             self.ultimo_perfil = datetime.now()
         finally:
             self.exit_iframe()
