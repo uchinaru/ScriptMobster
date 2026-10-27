@@ -266,6 +266,9 @@ Exemplo de `config.json`:
 | "Atualizar lista" pede para o bot estar rodando | A leitura usa a sessão do bot no jogo. Inicie o bot primeiro. |
 | "Nao consegui curar, verifique se tem dinheiro para o hospital!" | Falta dinheiro em mãos. Diminua `reserva_dinheiro` ou desligue o banco. |
 | "O alvo … está morto / no hospital" | Normal: o bot tenta de novo no próximo ciclo. |
+| "A missão X falhou: falta o item …" | A missão exige um item que você não tem. Escolha outra no painel (filtro "só sem item"). |
+| "Missões pausadas até HH:MM" | A missão falhou 3 vezes seguidas. O bot pausa as missões por 10 minutos e continua atacando. |
+| "O navegador fechou. Abrindo outro…" | O Chrome fechou ou travou (Mac dormiu, janela fechada). O bot reabre e faz login sozinho. |
 | Porta 8765 em uso | Já existe um painel aberto. Feche-o ou mude `PORTA` em `painel.py`. |
 | Aviso `NotOpenSSLWarning` | Python antigo do macOS. Use o Python 3.12 (`brew install python@3.12`). |
 
